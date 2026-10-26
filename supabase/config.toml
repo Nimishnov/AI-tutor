@@ -1,0 +1,4 @@
+project_id = "learnloop"
+
+[functions.tutor]
+verify_jwt = true
