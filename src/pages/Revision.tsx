@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ArrowRight, BookOpenCheck, Check, ChevronLeft, ChevronRight, Clock3,
-  FileText, Lightbulb, RotateCcw, Sparkles, Target, TriangleAlert
+  FileText, Lightbulb, RotateCcw, Target, TriangleAlert
 } from 'lucide-react';
 import type { LearningState, ViewKey } from '../types';
 
@@ -37,7 +37,7 @@ export default function Revision({ state, onNavigate }: Props) {
     <div className="revision-page page-stack">
       <div className="page-intro"><div><p className="eyebrow">MAKE ANOTHER PASS, AT THE RIGHT TIME</p><h1>Revision that listens.</h1><p className="intro-copy">Your next steps come from what you actually answered—not a guessed mastery score.</p></div><div className="page-intro-ornament revision-ornament"><RotateCcw size={24} /></div></div>
 
-      <section className="revision-hero"><div className="revision-hero-art"><div className="rev-orbit rev-orbit-one" /><div className="rev-orbit rev-orbit-two" /><div className="rev-center"><RotateCcw size={20} /></div></div><div className="revision-hero-copy"><span className="revision-kicker"><Sparkles size={13} /> YOUR PLAN, FROM YOUR PRACTICE</span><h2>{weakTopics.length ? 'Return to one idea at a time.' : 'Build a revision trail as you go.'}</h2><p>{weakTopics.length ? `Your latest answers suggest another look at ${weakTopics[0].concept}. A short revisit now may help it settle.` : 'Complete a few questions and your revision list will grow from the concepts you actually find tricky.'}</p></div><div className="revision-hero-stat"><strong>{weakTopics.length}</strong><span>topics to<br />revisit</span></div></section>
+      <section className="revision-hero"><div className="revision-hero-copy"><span className="revision-kicker"><BookOpenCheck size={15} /> FROM YOUR PRACTICE</span><h2>{weakTopics.length ? 'Return to one idea at a time.' : 'Build a revision trail as you go.'}</h2><p>{weakTopics.length ? `Your latest answers suggest another look at ${weakTopics[0].concept}. A short revisit now may help it settle.` : 'Complete a few questions and your revision list will grow from the concepts you actually find tricky.'}</p></div></section>
 
       <div className="revision-columns">
         <section className="revision-topics panel"><div className="panel-heading"><div><p className="eyebrow">BASED ON YOUR ANSWERS</p><h3>Topics to revisit</h3></div><div className="count-pill">{weakTopics.length}</div></div>{weakTopics.length ? <div className="revision-topic-list">{weakTopics.map((attempt, index) => <article className="revision-topic" key={attempt.concept}><div className={`topic-rank rank-${index % 3}`}><TriangleAlert size={16} /></div><div className="revision-topic-copy"><strong>{attempt.concept}</strong><span>Last answer: “{attempt.selectedText}”</span><em>Correct answer: {attempt.correctText}</em></div><div className="revision-topic-meta"><span><Clock3 size={13} /> {ago(attempt.createdAt)}</span><button className="revision-practice-link" onClick={() => onNavigate('practice')}>Practice <ArrowRight size={13} /></button></div></article>)}</div> : <div className="revision-clear"><div className="clear-icon"><Check size={17} /></div><div><strong>Nothing to revisit just yet.</strong><span>Your answers will add a topic here if it needs another pass.</span></div><button className="text-arrow" onClick={() => onNavigate('practice')}>Try a question <ArrowRight size={14} /></button></div>}<div className="revision-evidence"><Lightbulb size={14} /> A topic appears here when your most recent recorded answer was incorrect.</div></section>

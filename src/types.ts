@@ -1,5 +1,6 @@
-export type ViewKey = 'dashboard' | 'materials' | 'notes' | 'tutor' | 'practice' | 'revision';
+export type ViewKey = 'journey' | 'dashboard' | 'study' | 'materials' | 'notes' | 'tutor' | 'practice' | 'revision';
 export type MaterialOrigin = 'sample' | 'pasted' | 'pdf';
+export type StudyTabStatus = 'active' | 'completed';
 
 export interface SourcePage {
   page: number;
@@ -62,6 +63,7 @@ export interface QuizAttempt {
   createdAt: string;
 }
 
+/** A chronological activity item shown in the Home recent-activity list. */
 export interface LearningSession {
   id: string;
   title: string;
@@ -70,12 +72,29 @@ export interface LearningSession {
   createdAt: string;
 }
 
+/** A learner-visible left-rail tab anchored to one source material. */
+export interface StudyTab {
+  id: string;
+  title: string;
+  subject: string;
+  materialId: string;
+  createdAt: string;
+  lastOpenedAt: string;
+  status: StudyTabStatus;
+  groupId?: string;
+  completedAt?: string;
+}
+
 export interface LearningState {
   materials: StudyMaterial[];
   notes: StudyNote[];
   attempts: QuizAttempt[];
+  /** Recent activity history; this is distinct from the active study-tab list. */
   sessions: LearningSession[];
+  studyTabs: StudyTab[];
   activeMaterialId: string;
+  activeStudyTabId: string | null;
+  onboardingComplete: boolean;
 }
 
 export interface AIExplanation {

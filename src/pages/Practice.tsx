@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowRight, Check, ChevronRight, CircleHelp, FileText, Lightbulb,
-  LoaderCircle, RotateCcw, Sparkles, Target, TriangleAlert, X
+  BookOpenText, LoaderCircle, RotateCcw, Target, X
 } from 'lucide-react';
 import { analyzeMistake, generateQuizQuestion } from '../lib/ai';
 import { createId } from '../lib/storage';
@@ -12,6 +12,8 @@ interface Props {
   material: StudyMaterial;
   onRecordAttempt: (attempt: QuizAttempt) => void;
   onRecordSession: (title: string) => void;
+  onCompleteSession: () => void;
+  onReopenSession: () => void;
 }
 
 type QuizStage = 'ready' | 'pick' | 'answered' | 'reteach' | 'followup-answered';
@@ -20,7 +22,7 @@ function asQuestion(value: Omit<QuizQuestion, 'id'>, isFollowUp = false): QuizQu
   return { ...value, id: createId('question'), isFollowUp };
 }
 
-export default function Practice({ material, onRecordAttempt, onRecordSession }: Props) {
+export default function Practice({ material, onRecordAttempt, onRecordSession, onCompleteSession, onReopenSession }: Props) {
   const [question, setQuestion] = useState<QuizQuestion | null>(material.id === demoMaterialId ? firstQuestion : null);
   const [stage, setStage] = useState<QuizStage>(material.id === demoMaterialId ? 'pick' : 'ready');
   const [selected, setSelected] = useState('');
@@ -40,6 +42,7 @@ export default function Practice({ material, onRecordAttempt, onRecordSession }:
   const answeredCorrectly = selected === question?.correctId;
 
   const buildQuiz = async (topic = '') => {
+    onReopenSession();
     setBusy(true); setError('');
     try {
       const generated = await generateQuizQuestion(material, topic || material.title);
@@ -60,8 +63,13 @@ export default function Practice({ material, onRecordAttempt, onRecordSession }:
       correctId: current.correctId, correctText: answer?.text ?? 'Answer unavailable',
       isCorrect, isFollowUp: Boolean(current.isFollowUp), createdAt: now
     });
-    if (current.isFollowUp) setStage('followup-answered');
-    else { setStage('answered'); setInitialWasWrong(!isCorrect); }
+    if (current.isFollowUp) {
+      setStage('followup-answered');
+      onCompleteSession();
+    } else {
+      setStage('answered'); setInitialWasWrong(!isCorrect);
+      if (isCorrect) onCompleteSession();
+    }
   };
 
   const submitAnswer = () => {
@@ -82,7 +90,7 @@ export default function Practice({ material, onRecordAttempt, onRecordSession }:
   };
 
   if (stage === 'ready' || !question) {
-    return <div className="practice-page page-stack"><div className="page-intro"><div><p className="eyebrow">PRACTICE MAKES THE IDEA YOURS</p><h1>Try it, then learn from it.</h1><p className="intro-copy">A question from your own material is a good place to start.</p></div><div className="page-intro-ornament practice-ornament"><Target size={25} /></div></div><section className="quiz-empty panel"><div className="quiz-ready-mark"><Sparkles size={19} /></div><p className="eyebrow">MAKE IT YOURS</p><h2>Build a question from {material.title}.</h2><p>The tutor will make a four-choice question based on your material. Your answer helps decide what to teach next.</p><button className="button button-primary" disabled={busy} onClick={() => void buildQuiz()}>{busy ? <><LoaderCircle className="spin" size={16} /> Writing a fair question…</> : <><Sparkles size={15} /> Generate a question <ArrowRight size={15} /></>}</button>{error && <div className="inline-error" role="alert">{error}</div>}<div className="empty-source"><FileText size={14} /> Questions are based on: <strong>{material.title}</strong></div></section></div>;
+    return <div className="practice-page page-stack"><div className="page-intro"><div><p className="eyebrow">PRACTICE MAKES THE IDEA YOURS</p><h1>Try it, then learn from it.</h1><p className="intro-copy">A question from your own material is a good place to start.</p></div><div className="page-intro-ornament practice-ornament"><Target size={25} /></div></div><section className="quiz-empty panel"><div className="quiz-ready-mark"><BookOpenText size={19} /></div><p className="eyebrow">MAKE IT YOURS</p><h2>Build a question from {material.title}.</h2><p>The tutor will make a four-choice question based on your material. Your answer helps decide what to teach next.</p><button className="button button-primary" disabled={busy} onClick={() => void buildQuiz()}>{busy ? <><LoaderCircle className="spin" size={16} /> Writing a fair question…</> : <>Generate a question <ArrowRight size={15} /></>}</button>{error && <div className="inline-error" role="alert">{error}</div>}<div className="empty-source"><FileText size={14} /> Questions are based on: <strong>{material.title}</strong></div></section></div>;
   }
 
   const isFollowUp = Boolean(question.isFollowUp);
@@ -113,12 +121,11 @@ export default function Practice({ material, onRecordAttempt, onRecordSession }:
 
           {showInitialResult && answeredCorrectly && <div className="quiz-submit-row"><span className="quiz-source-citation"><Check size={13} /> Answer saved to your history</span><button className="button button-primary" onClick={() => void buildQuiz(question.concept)} disabled={busy}>{busy ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />} Try another question <ArrowRight size={14} /></button></div>}
 
-          {stage === 'reteach' && analysis && <div className="reteach-card"><div className="reteach-header"><div className="reteach-icon"><Lightbulb size={18} /></div><div><span className="eyebrow">A DIFFERENT WAY TO SEE IT</span><h3>Let’s try another explanation.</h3></div></div><div className="hypothesis-box"><span className="hypothesis-label"><CircleHelp size={13} /> A possibility, not a certainty <span className={`confidence-label confidence-${analysis.confidence}`}>{analysis.confidence} confidence</span></span><p>{analysis.hypothesis}</p><span className="hypothesis-foot">A wrong answer alone doesn’t tell us exactly what you were thinking.</span></div><div className="reteach-copy"><p>{analysis.reteach}</p><div className="reteach-example"><div><Sparkles size={14} /> A different example</div><p>{analysis.example}</p></div></div><div className="followup-banner"><div className="followup-number">02</div><div><span>NOW TEST THE SAME CONCEPT</span><strong>{analysis.concept}</strong></div><ChevronRight size={18} /></div><h4 className="followup-question">{question.question}</h4><div className="choice-list followup-choices" role="radiogroup" aria-label="Follow-up answer choices">{question.choices.map((choice) => <button key={choice.id} role="radio" aria-checked={selected === choice.id} className={`choice-option ${selected === choice.id ? 'choice-selected' : ''}`} onClick={() => setSelected(choice.id)}><span className="choice-letter">{choice.id}</span><span>{choice.text}</span><span className="choice-state">{selected === choice.id ? <Check size={15} /> : null}</span></button>)}</div><div className="quiz-submit-row followup-submit"><span className="quiz-source-citation"><FileText size={13} /> Same concept, new question</span><button className="button button-primary" onClick={() => selected && recordResponse(question, selected)} disabled={!selected}>Check follow-up <ArrowRight size={15} /></button></div></div>}
+          {stage === 'reteach' && analysis && <div className="reteach-card"><div className="reteach-header"><div className="reteach-icon"><Lightbulb size={18} /></div><div><span className="eyebrow">A DIFFERENT WAY TO SEE IT</span><h3>Let’s try another explanation.</h3></div></div><div className="hypothesis-box"><span className="hypothesis-label"><CircleHelp size={13} /> A possibility, not a certainty <span className={`confidence-label confidence-${analysis.confidence}`}>{analysis.confidence} confidence</span></span><p>{analysis.hypothesis}</p><span className="hypothesis-foot">A wrong answer alone doesn’t tell us exactly what you were thinking.</span></div><div className="reteach-copy"><p>{analysis.reteach}</p><div className="reteach-example"><div><BookOpenText size={14} /> A different example</div><p>{analysis.example}</p></div></div><div className="followup-banner"><div className="followup-number">02</div><div><span>NOW TEST THE SAME CONCEPT</span><strong>{analysis.concept}</strong></div><ChevronRight size={18} /></div><h4 className="followup-question">{question.question}</h4><div className="choice-list followup-choices" role="radiogroup" aria-label="Follow-up answer choices">{question.choices.map((choice) => <button key={choice.id} role="radio" aria-checked={selected === choice.id} className={`choice-option ${selected === choice.id ? 'choice-selected' : ''}`} onClick={() => setSelected(choice.id)}><span className="choice-letter">{choice.id}</span><span>{choice.text}</span><span className="choice-state">{selected === choice.id ? <Check size={15} /> : null}</span></button>)}</div><div className="quiz-submit-row followup-submit"><span className="quiz-source-citation"><FileText size={13} /> Same concept, new question</span><button className="button button-primary" onClick={() => selected && recordResponse(question, selected)} disabled={!selected}>Check follow-up <ArrowRight size={15} /></button></div></div>}
 
           {showFollowupResult && <div className={`answer-feedback-card followup-result ${answeredCorrectly ? 'feedback-correct' : 'feedback-incorrect'}`}><div className="feedback-heading">{answeredCorrectly ? <><span className="feedback-check"><Check size={14} /></span> {initialWasWrong ? 'The new explanation helped.' : 'You got the follow-up right.'}</> : <><span className="feedback-x"><X size={14} /></span> Still working on this one? That’s okay.</>}</div><p>{question.explanation}</p><div className="improvement-summary"><div className="improvement-symbol">{answeredCorrectly ? <Check size={16} /> : <RotateCcw size={16} />}</div><span>{answeredCorrectly && initialWasWrong ? 'First try missed it. Follow-up was correct. That improvement is recorded.' : answeredCorrectly ? 'Follow-up answer recorded as correct.' : 'Follow-up answer recorded. This topic will stay on your revision list.'}</span></div><div className="followup-actions"><button className="button button-primary" onClick={() => void buildQuiz(question.concept)} disabled={busy}>{busy ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />} Practice this concept again</button><span className="quiz-source-citation"><FileText size={13} /> {question.sourceCitation || 'From your study material'}</span></div></div>}
         </section>
 
-        <aside className="practice-side"><section className="practice-side-card loop-card"><div className="loop-card-top"><div className="side-card-icon loop-card-icon"><Sparkles size={16} /></div><span>THE LEARNING LOOP</span></div><div className="loop-card-line"><div className="mini-step mini-step-done"><Check size={12} /></div><div><strong>Try a question</strong><span>Start with what you know.</span></div></div><div className="mini-connector" /><div className={`loop-card-line ${stage === 'reteach' || showFollowupResult ? 'mini-active' : ''}`}><div className={`mini-step ${stage === 'reteach' || showFollowupResult ? 'mini-step-current' : ''}`}>{stage === 'reteach' || showFollowupResult ? <Lightbulb size={13} /> : '2'}</div><div><strong>See what got tricky</strong><span>Possible mix-ups, not assumptions.</span></div></div><div className="mini-connector" /><div className={`loop-card-line ${showFollowupResult ? 'mini-active' : ''}`}><div className={`mini-step ${showFollowupResult ? 'mini-step-current' : ''}`}>{showFollowupResult ? <Check size={13} /> : '3'}</div><div><strong>Try a new example</strong><span>Same idea. Different question.</span></div></div></section><section className="gentle-reminder"><span className="reminder-sun">✳</span><p>One wrong answer is <strong>information</strong>, not a verdict.</p></section><div className="practice-source-note"><TriangleAlert size={14} /><span>Check important facts against your material. AI-generated questions may need review.</span></div></aside>
       </div>
     </div>
   );

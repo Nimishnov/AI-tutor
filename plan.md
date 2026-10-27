@@ -1,42 +1,52 @@
-# Learnloop — Supabase-backed redesign plan
+# Learnloop Level 1 — redesign and learning-session plan
 
 ## Product and implementation
 
-Preserve the current React 19 + TypeScript + Vite application and its core loop: material → notes → explanation → quiz → mistake analysis → reteaching → follow-up → revision. Replace the current green, generic dashboard look with an editorial “study field-notes” identity built from inky black, paper white, confident cobalt, and a small amount of burnt orange. Keep a genuinely light counterpart with near-black type and similarly legible contrast. Make the interface feel authored through distinctive copy, handwritten-style marginal labels made with CSS, varied card proportions, responsive layouts, clear progress states, keyboard-visible focus, and short feedback animations—not stock AI imagery or a generic chatbot layout.
+Evolve the current React 19 + TypeScript + Vite tutor into a calmer beta product without removing the source-aware learning loop: study material → notes → explanation → quiz → mistake analysis → reteaching → follow-up → revision. Keep Supabase as the selected Auth/database/AI-hosting layer, GitHub Pages as static frontend hosting, localStorage as the offline fallback, and Manus' existing Vite AI proxy for Preview/local development.
 
-Add `@supabase/supabase-js` as a browser-safe client dependency. With `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, create a Supabase anonymous session, load and autosave the student's workspace in one owner-scoped JSONB row, and show whether the workspace is syncing or local-only. Keep the existing localStorage data as an offline fallback and seed a newly created remote workspace from that local state. Explain that anonymous accounts are tied to their browser session and cannot be recovered after clearing it unless a sign-in identity is added later.
+On a genuinely new installation, initialize an empty workspace and present a dedicated “Start your journey” screen rather than seeded activity. Let the learner start by uploading a selectable-text PDF, pasting notes, or typing a question; also offer an explicit optional sample lesson. Creating a study item opens a new active study tab in the left rail. Each tab selects its own material and the associated learning context. Keep Home limited to recorded stats and recent activity; move notes, tutor, practice, revision, and material/library actions to the rail or an on-demand tool section so the study canvas stays focused.
 
-Move production AI calls from the development-only Vite middleware to an authenticated Supabase Edge Function. The function validates user JWTs, accepts only the existing four actions (`notes`, `tutor`, `quiz`, `diagnose`), applies an atomic per-user daily request quota, and reads an OpenAI-compatible API key only from Supabase Edge Function secrets. The client sends no secret. Keep the Vite middleware as the Manus Preview/local fallback when Supabase environment variables are absent.
+Model study tabs as learner-visible sessions connected to their source material(s). Dragging an active tab onto another adds both to a named visual group, displayed as a compact bundle with its members available on expansion. Provide an accessible ellipsis/context menu action to split the group back into its original tabs; also accept right-click as a shortcut and provide a non-drag grouping action for keyboard/touch users. A group is visual organization, not a destructive content merge: notes, answers, and original material IDs remain separate. Persist group membership, active tab, and completion status in the existing per-user JSON workspace row; migrate older workspace JSON at load time without a destructive SQL schema change.
 
-Ship a PostgreSQL migration with strict `auth.uid()` row ownership, a Supabase CLI function configuration that keeps JWT verification enabled, `.env.example`, `.gitignore` secret protection, a GitHub Pages workflow that builds with the repo subpath and public Supabase values, and a step-by-step README for Supabase and GitHub setup. Do not commit real project IDs, keys, or provider secrets.
+Define “finished learning” as completing the first practice check correctly, or, after a miss, submitting the same-concept follow-up after targeted reteaching. On completion, automatically remove the tab from the active list and put it in a clearly labeled completed/archive section. Preserve its material and recorded answers so dashboard history and revision evidence remain truthful; allow reopening a completed tab. A learner can also finish early with an explicit “Finish session” control. This satisfies automatic active-tab cleanup without deleting useful study data.
+
+For Google sign-in, use Supabase browser OAuth through `linkIdentity({ provider: 'google', options: { redirectTo } })` when an anonymous session already exists, so linking preserves the existing `auth.uid()` workspace. Observe the restored auth session after the OAuth redirect and show whether the workspace is anonymous or linked to Google. Include documented Supabase/Google Console setup steps: Google web OAuth credentials, the Supabase callback URI, enabling Google and manual identity linking, and an exact production/site redirect allowlist. Keep OAuth Client Secret and AI provider keys in the Supabase dashboard, never browser variables or GitHub. Handle unconfigured OAuth and provider/linking errors in the UI without losing local work.
+
+Refit the whole interface as a warm classroom notebook: paper/cream and warm white in light mode; ink/navy or charcoal paper in dark mode; cobalt or teal as the wayfinding color, with a restrained orange/rust for corrections and annotations. Use fewer surface panels, obvious whitespace, one primary action per screen, and concise human-written microcopy. Raise normal reading text to 17–18px, supporting text to at least 14px, and utility labels to at least 12px. Keep contrast strong in both modes, preserve the existing light/dark preference behavior, add visible keyboard focus, support reduced motion, and maintain usable mobile layouts. Favor real paper rules, chapter tabs, handwritten margin-like labels made with CSS, and warm type over generic AI imagery or sparkle-heavy cards.
 
 ## Project structure
 
-- `src/`: existing responsive React application and learning-flow pages.
-- `src/lib/supabase.ts`: optional browser Supabase client and anonymous identity setup.
-- `src/lib/cloud-state.ts`: per-user state hydrate/save and sync status.
-- `src/lib/ai.ts`: invoke the protected Edge Function when configured, otherwise use the current local/Manus Vite proxy.
-- `supabase/config.toml`: CLI project defaults and JWT enforcement.
-- `supabase/migrations/`: workspace row, RLS, private usage counter, and safe quota RPC.
-- `supabase/functions/tutor/`: authenticated, bounded AI gateway; provider secrets remain server-side.
-- `.github/workflows/deploy-pages.yml`: GitHub Pages static build using `/AI-tutor/` and repo-configured public Supabase variables.
-- `.env.example`, `README.md`, and `docs/implementation-references.md`: safe environment template, deployment steps, and official references.
+- `src/App.tsx`: workspace hydration, onboarding, selected-session state, left rail, auth state, global tool navigation, and completion/group actions.
+- `src/pages/JourneyStart.tsx`: concise first-run “Start your journey” intake and optional sample lesson.
+- `src/pages/Dashboard.tsx`: home activity and supported metrics, without an overstuffed feature collage.
+- `src/pages/Materials.tsx`: PDF/paste/question input; each saved item creates a new session tab.
+- `src/pages/Notes.tsx`, `Tutor.tsx`, `Practice.tsx`, `Revision.tsx`: existing source-aware learning flow with simpler page density and session-bound callbacks.
+- `src/lib/storage.ts`: empty first-run state, backward-compatible normalization, local persistence, and session IDs.
+- `src/lib/cloud-state.ts`: backward-compatible JSON workspace hydration and Supabase sync.
+- `src/lib/supabase.ts`: optional Supabase client, anonymous session, Google identity linking, and auth observation.
+- `src/types.ts`: workspace/session lifecycle and grouping fields.
+- `src/styles.css`: complete warm-notebook light/dark system, larger typography, responsive session rail, accessible menus, and onboarding.
+- `supabase/migrations/`: existing per-user workspace JSONB row and RLS remain valid; no destructive migration is required for JSON-session fields. Apply a new SQL migration only if implementation proves the current table cannot support the feature.
+- `supabase/functions/tutor/`: retain authenticated bounded AI gateway and server-only provider secrets.
+- `README.md`, `BEGINNER_SETUP.md`, `.github/workflows/deploy-pages.yml`: explain OAuth setup, the app's callback allowlist, Supabase deployment, Pages variables, and safe source upload.
+
+## Constraints and release assumptions
+
+A Google provider client ID/secret and Supabase project settings are required before Google OAuth can work on the user's deployed site. The application's source will include working OAuth integration and click-by-click setup; this coding task will not invent or commit those credentials. The same is true for the AI provider key and deploying Supabase SQL/Edge Function: source/configuration can be tested here, but live Supabase services require the user's own account and secrets. Anonymous Auth continues to work before the learner links Google. A complete UI/product claim does not imply that the separate external Supabase project is configured.
+
+The output is a beta-ready source bundle. Keep the `/AI-tutor/` GitHub Pages workflow unless the user changes their repository name, keep the required `public/manus-routes.json` synchronized, preserve the existing project modifications, build both normal and Pages-base variants, and do not put secrets into the archive.
 
 ## Design system
 
-- **Design Movement:** Contemporary editorial field-notes / Swiss-inspired study journal, with the high-contrast utility of a print workbook and the energy of a music-zine margin.
-- **Core Principles:** Content first; loud hierarchy, quiet surfaces; personality in concise human copy; every action acknowledges what the learner just did.
-- **Color Philosophy:** Dark mode uses near-black ink, cool white text, cobalt as an active learning signal, and sparing orange for attention or correction. Light mode reverses the field to paper white and charcoal while retaining cobalt/orange accents and strong text contrast.
-- **Layout Paradigm:** A compact working sidebar plus a wide, asymmetrical learning canvas. Use a few deliberately offset panels and timeline-like learning steps rather than uniform center-aligned dashboard tiles.
-- **Signature Elements:** A cobalt “margin line” and chapter-number markers; orange annotation tabs for useful friction/mistakes; a restrained grain/rule treatment that suggests paper without image assets.
-- **Interaction Philosophy:** Immediate visual acknowledgment on tab changes, answers, save/sync status, and flashcard reveal; small menus/chips remain keyboard accessible; motion never hides state.
-- **Animation:** 150–240 ms ease-out transitions for hover/focus and reveal; brief slide/fade only on new feedback; respect `prefers-reduced-motion`; no looping decorative motion.
-- **Typography System:** A readable system sans for UI and a strong system-serif display face for selected editorial headings; monospace only for tiny source/page annotations. Keep body text calm and readable.
-- **Brand Essence:** “A study desk that remembers what tripped you up”; focused, candid, encouraging.
-- **Brand Voice:** Short and human, never motivational filler. Examples: “Let’s make the tricky bit less slippery.” “Good catch. Want another shot at the same idea?”
-- **Wordmark & Logo:** Keep the Learnloop wordmark, redraw the mark as a cobalt page tab crossing an ink-black loop; no default chatbot sparkle icon.
-- **Signature Brand Color:** Electric cobalt blue (`#356BFF` family), balanced by paper-white and a restrained burnt orange.
-
-## Constraints
-
-Supabase is the database/auth/Edge hosting layer; GitHub Pages remains a static frontend host. Anonymous Auth supports per-browser persistence, not account recovery or cross-device identity. Live AI requires the user to provide a provider key as a Supabase Edge Function secret; it must never be set as a `VITE_*` variable. The current Manus Preview still supports the existing Vite AI proxy and localStorage fallback. The Supabase function and SQL cannot be applied to the user's Supabase account from this file-only handoff; the README will give the CLI steps.
+- **Design Movement:** Warm classroom notebook / contemporary school field journal, with the readability of a printed workbook and light hand-annotation.
+- **Core Principles:** One focus at a time; generous paper-like breathing room; plain language before decoration; learner work is always retained unless they choose to delete it.
+- **Color Philosophy:** Light mode feels like warm paper with ink-dark copy; dark mode is a quiet chalkboard/ink desk with warm light text. Cobalt-teal directs navigation and active states. Rust orange marks corrections or a useful snag, never every button. Both modes keep readable contrast instead of simply inverting pale colors.
+- **Layout Paradigm:** Persistent, compact left rail for study tabs plus tools; one broad, calm reading canvas. The first-run view is a spacious invitation with one clear starting path, not a dashboard of cards.
+- **Signature Elements:** Notebook page-rule/margin, small chapter/index tabs for sessions, and a drawn underline or orange correction mark used sparingly.
+- **Interaction Philosophy:** Tabs behave like study threads: select, drag together, split from a visible menu, and move automatically to a recoverable completed section when a concrete learning loop finishes. Every action has a visible acknowledgement and a safe keyboard/touch alternative.
+- **Animation:** 150–220ms ease-out for tab selection, grouping, and reveal; a short collapse/slide into Completed when a session closes. No looping decorative motion; respect `prefers-reduced-motion`.
+- **Typography System:** Readable system sans for body/UI at 17–18px; sturdy system-serif display headings for warmth. Minimum 14px for secondary copy and 12px for labels; monospace only for short page/source markers.
+- **Brand Essence:** “A calm study desk for getting unstuck and remembering what worked”; warm, clear, dependable.
+- **Brand Voice:** Short, grounded and welcoming, with no generic hype. Examples: “Start with one page or one question.” “That thread is finished. Your notes are still here if you need them.”
+- **Wordmark & Logo:** Retain the Learnloop wordmark; keep the page-tab/loop mark but recolor it as an ink outline with a cobalt page edge and a small rust annotation.
+- **Signature Brand Color:** Ink-cobalt (`#315FC4` family), balanced by warm paper and sparing burnt orange.

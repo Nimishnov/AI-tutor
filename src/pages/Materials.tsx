@@ -1,7 +1,7 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  ArrowRight, Check, FileText, FileUp, Files, FilePlus2, Link2,
-  LoaderCircle, MessageCircleQuestion, Sparkles, UploadCloud
+  ArrowRight, BookOpen, Check, FileText, FileUp, Files, FilePlus2, Link2,
+  Lightbulb, LoaderCircle, MessageCircleQuestion, UploadCloud
 } from 'lucide-react';
 import { extractDocument } from '../lib/documents';
 import { createId } from '../lib/storage';
@@ -10,6 +10,7 @@ import type { StudyMaterial, ViewKey } from '../types';
 interface Props {
   materials: StudyMaterial[];
   activeMaterialId: string;
+  initialMode?: InputMode;
   onAddMaterial: (material: StudyMaterial, nextView?: ViewKey) => void;
   onSelectMaterial: (id: string) => void;
   onNavigate: (view: ViewKey) => void;
@@ -17,8 +18,8 @@ interface Props {
 
 type InputMode = 'upload' | 'paste' | 'question';
 
-export default function Materials({ materials, activeMaterialId, onAddMaterial, onSelectMaterial, onNavigate }: Props) {
-  const [mode, setMode] = useState<InputMode>('upload');
+export default function Materials({ materials, activeMaterialId, initialMode = 'upload', onAddMaterial, onSelectMaterial, onNavigate }: Props) {
+  const [mode, setMode] = useState<InputMode>(initialMode);
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -27,6 +28,11 @@ export default function Materials({ materials, activeMaterialId, onAddMaterial, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setMode(initialMode);
+    setError('');
+  }, [initialMode]);
 
   const handleFile = async (file?: File) => {
     if (!file) return;
@@ -67,7 +73,7 @@ export default function Materials({ materials, activeMaterialId, onAddMaterial, 
       sourcePages: sourcePages.length ? sourcePages : [{ page: 1, excerpt: cleanBody.slice(0, 260) }],
       createdAt: new Date().toISOString()
     };
-    onAddMaterial(material, isQuestion ? 'tutor' : 'notes');
+    onAddMaterial(material, 'study');
   };
 
   return (
@@ -108,26 +114,26 @@ export default function Materials({ materials, activeMaterialId, onAddMaterial, 
 
           {mode === 'question' && (
             <>
-              <div className="question-illustration"><div className="question-bubble"><Sparkles size={18} /></div><span>Curiosity is a good place to start.</span></div>
+              <div className="question-illustration"><div className="question-bubble"><Lightbulb size={18} /></div><span>Curiosity is a good place to start.</span></div>
               <label className="field-label" htmlFor="typed-question">What would you like to understand?</label>
               <textarea id="typed-question" className="text-area question-textarea" value={body} onChange={(event) => setBody(event.target.value)} placeholder="For example: Why does a heavier cart accelerate less if I push it just as hard?" rows={5} maxLength={2000} />
-              <div className="field-hint"><Sparkles size={13} /> The tutor will answer using the selected material when one is available.</div>
+              <div className="field-hint"><FileText size={13} /> This question becomes its own study thread.</div>
             </>
           )}
 
           {error && <div className="inline-error" role="alert">{error}</div>}
-          <div className="form-footer"><span className="privacy-note"><Check size={14} /> Saved to your private study space</span><button className="button button-primary" type="submit">{mode === 'question' ? 'Untangle this' : 'Start a study session'} <ArrowRight size={16} /></button></div>
+          <div className="form-footer"><span className="privacy-note"><Check size={14} /> Saved on this device; synced when connected</span><button className="button button-primary" type="submit">{mode === 'question' ? 'Open this study thread' : 'Start a study session'} <ArrowRight size={16} /></button></div>
         </form>
-        <div className="prototype-note"><Sparkles size={15} /><span>Text-based PDF extraction is included. OCR for photos and slide decks can follow in the next build.</span></div>
+        <div className="prototype-note"><FileText size={15} /><span>PDFs need selectable text. This beta cannot read photographed pages or slide decks.</span></div>
       </section>
 
       <section className="library-section">
-        <div className="section-heading-row"><div><p className="eyebrow">YOUR LOCAL LIBRARY</p><h2>Saved study material <span className="count-pill">{materials.length}</span></h2></div><button className="text-button" onClick={() => onNavigate('notes')}>Open notes <ArrowRight size={14} /></button></div>
+        <div className="section-heading-row"><div><p className="eyebrow">YOUR MATERIALS</p><h2>Saved study material <span className="count-pill">{materials.length}</span></h2></div><button className="text-button" onClick={() => onNavigate('notes')}>Open notes <ArrowRight size={14} /></button></div>
         {materials.length ? (
           <div className="material-list">
             {materials.map((material) => {
               const active = material.id === activeMaterialId;
-              return <button key={material.id} className={`material-row ${active ? 'material-row-active' : ''}`} onClick={() => onSelectMaterial(material.id)}><div className={`material-row-icon ${material.origin === 'sample' ? 'icon-sample' : material.origin === 'pdf' ? 'icon-pdf' : 'icon-paste'}`}>{material.origin === 'sample' ? <Sparkles size={17} /> : material.origin === 'pdf' ? <FileText size={17} /> : <FilePlus2 size={17} />}</div><div className="material-row-copy"><strong>{material.title}</strong><span>{material.subject} · {material.origin === 'sample' ? 'Sample source' : material.origin === 'pdf' ? 'PDF upload' : 'Pasted text'}</span></div><span className="material-selected">{active ? <><Check size={14} /> Selected</> : <ArrowRight size={15} />}</span></button>;
+              return <button key={material.id} className={`material-row ${active ? 'material-row-active' : ''}`} onClick={() => onSelectMaterial(material.id)}><div className={`material-row-icon ${material.origin === 'sample' ? 'icon-sample' : material.origin === 'pdf' ? 'icon-pdf' : 'icon-paste'}`}>{material.origin === 'sample' ? <BookOpen size={17} /> : material.origin === 'pdf' ? <FileText size={17} /> : <FilePlus2 size={17} />}</div><div className="material-row-copy"><strong>{material.title}</strong><span>{material.subject} · {material.origin === 'sample' ? 'Sample source' : material.origin === 'pdf' ? 'PDF upload' : 'Pasted text'}</span></div><span className="material-selected">{active ? <><Check size={14} /> Selected</> : <ArrowRight size={15} />}</span></button>;
             })}
           </div>
         ) : <div className="empty-library"><FileText size={20} /><span>Your saved materials will live here.</span></div>}

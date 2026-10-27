@@ -37,6 +37,47 @@ export async function ensureAnonymousUser(): Promise<User> {
       anonymousSignIn = null;
     });
   }
-
   return anonymousSignIn;
+}
+
+function appRedirectUrl(): string {
+  return new URL(import.meta.env.BASE_URL || '/', window.location.origin).toString();
+}
+
+export function isGoogleLinked(user: User | null): boolean {
+  return Boolean(user?.identities?.some((identity) => identity.provider === 'google'));
+}
+
+/** Link Google to the current workspace; this preserves its auth.users ID and RLS-owned data. */
+export async function beginGoogleIdentityLink(): Promise<void> {
+  if (!supabase) throw new Error('Google sign-in needs the Supabase URL and publishable key to be configured first.');
+  const user = await ensureAnonymousUser();
+  if (isGoogleLinked(user)) return;
+  const { error } = await supabase.auth.linkIdentity({
+    provider: 'google',
+    options: {
+      redirectTo: appRedirectUrl(),
+      queryParams: { prompt: 'select_account' }
+    }
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Explicit switch to an existing Google account. Call only after the learner confirms the workspace switch. */
+export async function beginExistingGoogleSignIn(): Promise<void> {
+  if (!supabase) throw new Error('Google sign-in needs the Supabase URL and publishable key to be configured first.');
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw new Error(sessionError.message);
+  if (sessionData.session) {
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) throw new Error(error.message);
+  }
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: appRedirectUrl(),
+      queryParams: { prompt: 'select_account' }
+    }
+  });
+  if (error) throw new Error(error.message);
 }

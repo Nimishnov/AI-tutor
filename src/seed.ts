@@ -1,4 +1,4 @@
-import type { LearningState, QuizQuestion, StudyMaterial, StudyNote } from './types';
+import type { LearningState, QuizQuestion, StudyMaterial, StudyNote, StudyTab } from './types';
 
 export const demoMaterialId = 'demo-newtons-laws';
 
@@ -65,33 +65,42 @@ export const firstQuestion: QuizQuestion = {
   sourceCitation: 'Sample material · p. 2'
 };
 
+function sampleTab(): StudyTab {
+  const now = new Date().toISOString();
+  return {
+    id: 'sample-tab-newton',
+    title: demoMaterial.title,
+    subject: demoMaterial.subject,
+    materialId: demoMaterial.id,
+    createdAt: demoMaterial.createdAt,
+    lastOpenedAt: now,
+    status: 'active'
+  };
+}
+
+export function makeEmptyState(): LearningState {
+  return {
+    materials: [],
+    notes: [],
+    attempts: [],
+    sessions: [],
+    studyTabs: [],
+    activeMaterialId: '',
+    activeStudyTabId: null,
+    onboardingComplete: false
+  };
+}
+
+/** Optional sample for learners who explicitly choose to explore an example. */
 export function makeDemoState(): LearningState {
-  const now = Date.now();
-  const past = (hours: number) => new Date(now - hours * 60 * 60 * 1000).toISOString();
   return {
     materials: [demoMaterial],
     notes: [demoNote],
-    attempts: [
-      {
-        id: 'sample-attempt-1', question: firstQuestion.question, concept: firstQuestion.concept,
-        selectedId: 'B', selectedText: '12 m/s²', correctId: 'A', correctText: '3 m/s²',
-        isCorrect: false, isFollowUp: false, createdAt: past(22)
-      },
-      {
-        id: 'sample-attempt-2', question: 'If the same 6 N force acts on a 3 kg cart, what is its acceleration?',
-        concept: firstQuestion.concept, selectedId: 'B', selectedText: '2 m/s²', correctId: 'B', correctText: '2 m/s²',
-        isCorrect: true, isFollowUp: true, createdAt: past(21)
-      },
-      {
-        id: 'sample-attempt-3', question: 'When you push a wall, where does the equal-and-opposite force act?',
-        concept: 'Action–reaction pairs', selectedId: 'A', selectedText: 'On the wall, so it cancels your push on the wall.',
-        correctId: 'B', correctText: 'On your hand, from the wall.', isCorrect: false, isFollowUp: false, createdAt: past(3)
-      }
-    ],
-    sessions: [
-      { id: 'sample-session-1', title: "Newton's Laws · Practice", subject: 'Physics · Mechanics', materialId: demoMaterialId, createdAt: past(21) },
-      { id: 'sample-session-2', title: 'Forces & free-body diagrams', subject: 'Physics · Mechanics', materialId: demoMaterialId, createdAt: past(3) }
-    ],
-    activeMaterialId: demoMaterialId
+    attempts: [],
+    sessions: [],
+    studyTabs: [sampleTab()],
+    activeMaterialId: demoMaterialId,
+    activeStudyTabId: 'sample-tab-newton',
+    onboardingComplete: true
   };
 }
