@@ -1,10 +1,10 @@
 import { ArrowRight, BookOpen, Check, Clock3, FileText, NotebookPen, Target, TriangleAlert, Zap } from 'lucide-react';
-import type { LearningState, ViewKey } from '../types';
+import type { LearningSession, LearningState, ViewKey } from '../types';
 
 interface Props {
   state: LearningState;
   onNavigate: (view: ViewKey) => void;
-  onOpenMaterial: (materialId: string) => void;
+  onOpenActivity: (activity: LearningSession) => void;
   onStartNew: () => void;
 }
 
@@ -23,7 +23,7 @@ function relativeTime(date: string): string {
   return days === 1 ? 'Yesterday' : `${days} days ago`;
 }
 
-export default function Dashboard({ state, onNavigate, onOpenMaterial, onStartNew }: Props) {
+export default function Dashboard({ state, onNavigate, onOpenActivity, onStartNew }: Props) {
   const weak = weakTopics(state);
   const followups = state.attempts.filter((attempt) => attempt.isFollowUp);
   const improved = followups.filter((attempt) => attempt.isCorrect).length;
@@ -47,9 +47,13 @@ export default function Dashboard({ state, onNavigate, onOpenMaterial, onStartNe
         {recent.length ? <div className="dashboard-recent-list">{recent.map((item, index) => {
           const source = state.materials.find((entry) => entry.id === item.materialId);
           const hasNotes = state.notes.some((note) => note.materialId === item.materialId);
-          return <button type="button" className="dashboard-recent-row" key={item.id} onClick={() => onOpenMaterial(item.materialId)}>
+          const hasTutorExchange = Boolean(item.tutorExchangeId && state.tutorExchanges.some((exchange) => exchange.id === item.tutorExchangeId));
+          const activityDestination = item.destination === 'tutor'
+            ? hasTutorExchange ? 'Reopen this Tutor exchange' : 'Open Tutor · older exchange unavailable'
+            : item.destination === 'practice' ? 'Open Practice for this topic' : source?.title ?? item.subject;
+          return <button type="button" className="dashboard-recent-row" key={item.id} onClick={() => onOpenActivity(item)}>
             <span className={`recent-row-icon recent-row-icon-${index % 3}`}>{item.title.toLowerCase().includes('tutor') ? <NotebookPen size={18} /> : item.title.toLowerCase().includes('practice') || item.title.toLowerCase().includes('reteach') ? <Target size={18} /> : <FileText size={18} />}</span>
-            <span className="recent-row-copy"><strong>{item.title}</strong><span>{source?.title ?? item.subject}{hasNotes ? ' · Notes ready' : ''}</span></span>
+            <span className="recent-row-copy"><strong>{item.title}</strong><span>{activityDestination}{hasNotes && item.destination !== 'tutor' ? ' · Notes ready' : ''}</span></span>
             <span className="recent-row-time"><Clock3 size={14} />{relativeTime(item.createdAt)}</span><ArrowRight size={16} className="recent-row-arrow" />
           </button>;
         })}</div> : <div className="dashboard-empty-recent"><span className="empty-note-mark"><TriangleAlert size={18} /></span><div><strong>No recent activity yet.</strong><span>Start a study thread and your work will show up here.</span></div><button type="button" className="quiet-link" onClick={onStartNew}>Add material <ArrowRight size={15} /></button></div>}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  ArrowDownToLine, BookOpen, Brain, Check, ChevronDown, ChevronRight, ClipboardCheck,
+  ArrowDownToLine, BookOpen, Brain, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck,
   FilePlus2, FileStack, FolderOpen, GraduationCap, Home, Layers2, MoreHorizontal,
   NotebookPen, RotateCcw, Split, X
 } from 'lucide-react';
@@ -35,7 +35,8 @@ const toolItems: Array<{ key: ViewKey; label: string; icon: typeof BookOpen }> =
   { key: 'notes', label: 'Notes', icon: NotebookPen },
   { key: 'tutor', label: 'Tutor', icon: Brain },
   { key: 'practice', label: 'Practice', icon: ClipboardCheck },
-  { key: 'revision', label: 'Revision', icon: RotateCcw }
+  { key: 'revision', label: 'Revision', icon: RotateCcw },
+  { key: 'help', label: 'How to use', icon: CircleHelp }
 ];
 
 function groupedEntries(tabs: StudyTab[]) {
@@ -184,7 +185,7 @@ export default function AppSidebar(props: Props) {
         <div className="tool-nav">
           <div className="sidebar-section-heading"><span>TOOLS</span></div>
           {toolItems.map(({ key, label, icon: Icon }) => (
-            <button key={key} type="button" disabled={state.materials.length === 0 && key !== 'materials'} className={`nav-item ${view === key ? 'active' : ''}`} onClick={() => onNavigate(key)}><Icon size={18} /><span>{label}</span></button>
+            <button key={key} type="button" disabled={state.materials.length === 0 && key !== 'materials' && key !== 'help'} className={`nav-item ${view === key ? 'active' : ''}`} onClick={() => onNavigate(key)}><Icon size={18} /><span>{label}</span></button>
           ))}
         </div>
 

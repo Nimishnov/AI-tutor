@@ -1,4 +1,5 @@
-export type ViewKey = 'journey' | 'dashboard' | 'study' | 'materials' | 'notes' | 'tutor' | 'practice' | 'revision';
+export type ViewKey = 'journey' | 'dashboard' | 'study' | 'materials' | 'notes' | 'tutor' | 'practice' | 'revision' | 'help';
+export type CloudStatus = 'connecting' | 'synced' | 'syncing' | 'local' | 'offline';
 export type MaterialOrigin = 'sample' | 'pasted' | 'pdf';
 export type StudyTabStatus = 'active' | 'completed';
 
@@ -70,6 +71,8 @@ export interface LearningSession {
   subject: string;
   materialId: string;
   createdAt: string;
+  destination?: ViewKey;
+  tutorExchangeId?: string;
 }
 
 /** A learner-visible left-rail tab anchored to one source material. */
@@ -89,6 +92,7 @@ export interface LearningState {
   materials: StudyMaterial[];
   notes: StudyNote[];
   attempts: QuizAttempt[];
+  tutorExchanges: TutorExchange[];
   /** Recent activity history; this is distinct from the active study-tab list. */
   sessions: LearningSession[];
   studyTabs: StudyTab[];
@@ -102,6 +106,15 @@ export interface AIExplanation {
   steps: string[];
   example: string;
   sourceStatus: string;
+}
+
+export interface TutorExchange {
+  id: string;
+  materialId: string;
+  question: string;
+  answer?: AIExplanation;
+  error?: string;
+  createdAt: string;
 }
 
 export interface AIMisconception {

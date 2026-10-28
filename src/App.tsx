@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, BookOpenCheck, Menu, Moon, Sun } from 'lucide-react';
 import type { User } from '@supabase/supabase-js';
 import AppSidebar from './components/AppSidebar';
 import Dashboard from './pages/Dashboard';
+import Help from './pages/Help';
 import JourneyStart, { type MaterialStartMode } from './pages/JourneyStart';
 import Materials from './pages/Materials';
 import Notes from './pages/Notes';
 import Practice from './pages/Practice';
 import Revision from './pages/Revision';
 import StudyRoom from './pages/StudyRoom';
+import SignInGate from './pages/SignInGate';
 import Tutor from './pages/Tutor';
 import { loadOrCreateCloudWorkspace, saveCloudWorkspace } from './lib/cloud-state';
 import {
@@ -19,18 +21,17 @@ import {
   hasSupabaseConfig, isGoogleLinked, supabase
 } from './lib/supabase';
 import { makeDemoState, makeEmptyState, demoMaterial } from './seed';
-import type { LearningState, QuizAttempt, StudyMaterial, StudyNote, StudyTab, ViewKey } from './types';
+import type { CloudStatus, LearningSession, LearningState, QuizAttempt, StudyMaterial, StudyNote, StudyTab, TutorExchange, ViewKey } from './types';
 
 type ColorMode = 'light' | 'dark';
-type CloudStatus = 'connecting' | 'synced' | 'syncing' | 'local' | 'offline';
 const COLOR_MODE_KEY = 'learnloop-color-mode';
 const cloudStatusLabels: Record<CloudStatus, string> = {
-  connecting: 'OPENING YOUR DESK', synced: 'SAVED TO CLOUD', syncing: 'SAVING',
-  local: 'SAVED ON THIS DEVICE', offline: 'OFFLINE · SAVED HERE'
+  connecting: 'CHECKING ACCOUNT', synced: 'SAVED TO ACCOUNT', syncing: 'SAVING TO ACCOUNT',
+  local: 'DEVICE ONLY · NOT SYNCED', offline: 'OFFLINE · DEVICE COPY ONLY'
 };
 const pageTitles: Record<ViewKey, string> = {
   journey: 'Start your journey', dashboard: 'Home', study: 'Study thread',
-  materials: 'Library', notes: 'Notes', tutor: 'Tutor', practice: 'Practice', revision: 'Revision'
+  materials: 'Library', notes: 'Notes', tutor: 'Tutor', practice: 'Practice', revision: 'Revision', help: 'How to use Learnloop'
 };
 
 function getInitialColorMode(): ColorMode {
@@ -78,7 +79,9 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [focusTutorExchangeId, setFocusTutorExchangeId] = useState<string | null>(null);
   const [materialStartMode, setMaterialStartMode] = useState<MaterialStartMode>('upload');
+  const pageContentRef = useRef<HTMLDivElement>(null);
   const cloudStatusRef = useRef<CloudStatus>(cloudStatus);
   const authUserIdRef = useRef<string | null>(null);
   const initialHydrationDoneRef = useRef(false);
@@ -199,6 +202,10 @@ export default function App() {
   }, [state, cloudReady, authUser?.id]);
 
   useEffect(() => { document.documentElement.dataset.theme = colorMode; }, [colorMode]);
+  useLayoutEffect(() => {
+    pageContentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [view]);
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(''), 3600);
@@ -219,6 +226,7 @@ export default function App() {
   const activeNote = state.notes.find((note) => note.materialId === activeMaterial.id);
 
   const navigate = (next: ViewKey) => {
+    setFocusTutorExchangeId(null);
     setView(next);
     setMobileNavOpen(false);
     setAuthError('');
@@ -266,15 +274,24 @@ export default function App() {
     setState((current) => ({
       ...current,
       notes: [note, ...current.notes.filter((item) => item.materialId !== note.materialId)],
-      sessions: [{ id: createId('activity'), title: `Notes · ${note.title}`, subject: activeMaterial.subject, materialId: note.materialId, createdAt }, ...current.sessions]
+      sessions: [{ id: createId('activity'), title: `Notes · ${note.title}`, subject: activeMaterial.subject, materialId: note.materialId, createdAt, destination: 'notes' }, ...current.sessions]
     }));
     setToast('Notes saved to this study thread.');
   };
 
-  const recordActivity = (title: string, material = activeMaterial) => {
+  const recordActivity = (title: string, material = activeMaterial, destination: ViewKey = 'study', tutorExchangeId?: string) => {
+    const id = createId('activity');
     setState((current) => ({
       ...current,
-      sessions: [{ id: createId('activity'), title, subject: material.subject, materialId: material.id, createdAt: new Date().toISOString() }, ...current.sessions]
+      sessions: [{ id, title, subject: material.subject, materialId: material.id, createdAt: new Date().toISOString(), destination, tutorExchangeId }, ...current.sessions]
+    }));
+    return id;
+  };
+
+  const saveTutorExchange = (exchange: TutorExchange) => {
+    setState((current) => ({
+      ...current,
+      tutorExchanges: [exchange, ...current.tutorExchanges.filter((item) => item.id !== exchange.id)]
     }));
   };
 
@@ -284,7 +301,7 @@ export default function App() {
       attempts: [attempt, ...current.attempts],
       sessions: attempt.isFollowUp ? current.sessions : [{
         id: createId('activity'), title: `Practice · ${attempt.concept}`,
-        subject: activeMaterial.subject, materialId: activeMaterial.id, createdAt: attempt.createdAt
+        subject: activeMaterial.subject, materialId: activeMaterial.id, createdAt: attempt.createdAt, destination: 'practice'
       }, ...current.sessions]
     }));
   };
@@ -311,6 +328,26 @@ export default function App() {
     navigate('study');
   };
 
+  const openActivity = (activity: LearningSession) => {
+    const material = state.materials.find((item) => item.id === activity.materialId);
+    if (!material) return;
+    const tab = state.studyTabs.find((item) => item.materialId === material.id && item.status === 'active')
+      ?? state.studyTabs.find((item) => item.materialId === material.id)
+      ?? newStudyTab(material);
+    const openedTab: StudyTab = { ...tab, status: 'active', completedAt: undefined, lastOpenedAt: new Date().toISOString() };
+    setState((current) => ({
+      ...current,
+      studyTabs: current.studyTabs.some((item) => item.id === openedTab.id)
+        ? current.studyTabs.map((item) => item.id === openedTab.id ? openedTab : item)
+        : [openedTab, ...current.studyTabs],
+      activeMaterialId: material.id,
+      activeStudyTabId: openedTab.id
+    }));
+    setFocusTutorExchangeId(activity.tutorExchangeId ?? null);
+    setView(activity.destination ?? 'study');
+    setMobileNavOpen(false);
+  };
+
   const selectMaterial = (materialId: string) => {
     const found = state.studyTabs.find((tab) => tab.materialId === materialId);
     setState((current) => ({ ...current, activeMaterialId: materialId, activeStudyTabId: found?.id ?? current.activeStudyTabId }));
@@ -327,8 +364,8 @@ export default function App() {
         activeStudyTabId: current.activeStudyTabId
       };
     });
-    if (view === 'study' && state.activeStudyTabId === tabId) setView('dashboard');
-    setToast('Moved to Completed. Your source, notes, and answers are still saved.');
+    if (state.activeStudyTabId === tabId && ['study', 'practice'].includes(view)) setView('dashboard');
+    setToast('Session finished and moved to Completed. Your source, notes, and answers are still saved.');
   };
 
   const reopenStudyTabInPlace = (tabId: string) => {
@@ -378,7 +415,7 @@ export default function App() {
   };
 
   const clearWorkspace = () => {
-    if (!window.confirm('Clear this workspace? Its study tabs, materials, notes, and answer history will be removed from this account and this browser. Download a backup first if you may need these items.')) return;
+    if (!window.confirm('Clear this workspace? Its study tabs, materials, notes, Tutor questions and answers, and quiz history will be removed from this account and this browser. Download a backup first if you may need these items.')) return;
     setState(resetLearningState(authUser?.id));
     setView('journey');
     setToast('Your study desk is clear. Start a new journey whenever you are ready.');
@@ -418,27 +455,35 @@ export default function App() {
       case 'journey':
         return <JourneyStart onStart={(mode) => { setMaterialStartMode(mode); navigate('materials'); }} onTrySample={addSample} hasCloud={hasSupabaseConfig} googleLinked={googleLinked} googleEmail={authUser?.email} authBusy={authBusy} authError={authError} onGoogleLink={() => void startGoogleLink()} onNavigate={navigate} />;
       case 'dashboard':
-        return <Dashboard state={state} onNavigate={navigate} onOpenMaterial={openMaterial} onStartNew={startNewStudy} />;
+        return <Dashboard state={state} onNavigate={navigate} onOpenActivity={openActivity} onStartNew={startNewStudy} />;
       case 'study':
         return activeTab ? <StudyRoom tab={activeTab} material={activeMaterial} note={activeNote} onNavigate={navigate} onFinish={() => finishStudyTab(activeTab.id)} />
           : <section className="empty-state"><h2>No active study tab.</h2><p>Finished tabs are kept in Completed. Restore one or start a new study.</p><button className="button button-primary" onClick={startNewStudy}>Start a new study <ArrowRight size={15} /></button></section>;
       case 'materials':
-        return <Materials materials={state.materials} activeMaterialId={activeMaterial.id} initialMode={materialStartMode} onAddMaterial={addMaterial} onSelectMaterial={(id) => openMaterial(id)} onNavigate={navigate} />;
+        return <Materials materials={state.materials} activeMaterialId={activeMaterial.id} saveStatus={cloudStatus === 'synced' ? 'Synced to your Google-linked account.' : cloudStatus === 'syncing' || cloudStatus === 'connecting' ? 'Saving to your account…' : 'Saved on this device only · not synced'} initialMode={materialStartMode} onAddMaterial={addMaterial} onSelectMaterial={(id) => openMaterial(id)} onNavigate={navigate} />;
       case 'notes':
         return <Notes material={activeMaterial} note={activeNote} materials={state.materials} onSelectMaterial={selectMaterial} onSaveNote={saveNote} onNavigate={navigate} />;
       case 'tutor':
-        return <Tutor material={activeMaterial} onRecordSession={(title) => recordActivity(`Tutor · ${title}`)} />;
+        return <Tutor material={activeMaterial} exchanges={state.tutorExchanges} focusExchangeId={focusTutorExchangeId} onRecordSession={(title, exchangeId) => { recordActivity(`Tutor · ${title}`, activeMaterial, 'tutor', exchangeId); }} onSaveExchange={saveTutorExchange} />;
       case 'practice':
-        return <Practice material={activeMaterial} onRecordAttempt={recordAttempt} onRecordSession={(title) => recordActivity(title)} onCompleteSession={() => { if (activeTab) finishStudyTab(activeTab.id); }} onReopenSession={() => { if (activeTab) reopenStudyTabInPlace(activeTab.id); }} />;
+        return <Practice material={activeMaterial} onRecordAttempt={recordAttempt} onRecordSession={(title) => recordActivity(title, activeMaterial, 'practice')} onCompleteSession={() => { if (activeTab) finishStudyTab(activeTab.id); }} onReopenSession={() => { if (activeTab) reopenStudyTabInPlace(activeTab.id); }} />;
       case 'revision':
         return <Revision state={state} onNavigate={navigate} />;
+      case 'help':
+        return <Help onNavigate={navigate} cloudStatus={cloudStatus} googleEmail={authUser?.email} />;
       default:
-        return <Dashboard state={state} onNavigate={navigate} onOpenMaterial={openMaterial} onStartNew={startNewStudy} />;
+        return <Dashboard state={state} onNavigate={navigate} onOpenActivity={openActivity} onStartNew={startNewStudy} />;
     }
   };
 
-  const topbarStatus = googleLinked ? `GOOGLE · ${authUser?.email ?? 'CONNECTED'}` : cloudStatusLabels[cloudStatus];
-  const profileText = googleLinked ? authUser?.email?.slice(0, 1).toUpperCase() ?? 'G' : 'YOU';
+  const topbarStatus = cloudStatusLabels[cloudStatus];
+  const compactCloudStatus = cloudStatus === 'synced' ? 'SYNCED' : cloudStatus === 'syncing' ? 'SAVING' : cloudStatus === 'connecting' ? 'CHECKING' : 'NOT SYNCED';
+  const profileText = authUser?.email?.slice(0, 1).toUpperCase() ?? 'G';
+
+  if (!cloudReady) {
+    return <main className="signin-gate"><section className="signin-card signin-loading" role="status" aria-live="polite"><div className="signin-brand"><span className="brand-mark" aria-hidden="true"><span /><span /><span /></span><strong>learnloop</strong></div><h1>Checking your sign-in…</h1><p className="signin-copy">Opening your Google-linked study desk.</p></section></main>;
+  }
+  if (!googleLinked) return <SignInGate hasCloud={hasSupabaseConfig} hasCurrentWorkspace={Boolean(authUser?.id)} authBusy={authBusy} authError={authError} onLinkCurrent={() => void startGoogleLink()} onSignInExisting={() => void startGoogleSwitch()} />;
 
   return (
     <div className="app-frame">
@@ -459,14 +504,14 @@ export default function App() {
           <button className="icon-button mobile-menu" type="button" aria-label="Open study navigation" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button>
           <div className="topbar-crumb"><span>Learnloop</span><span className="crumb-slash">/</span><strong>{pageTitles[view]}</strong></div>
           <div className="topbar-right">
-            <span className={`cloud-pill cloud-${cloudStatus}`} role="status" aria-live="polite" title={googleLinked ? `Linked with ${authUser?.email ?? 'Google'}` : 'Anonymous and browser-local work is not recoverable across devices until a Google identity is linked.'}><span className="demo-pill-dot" />{topbarStatus}</span>
+            <span className={`cloud-pill cloud-${cloudStatus}`} role="status" aria-live="polite" aria-label={topbarStatus} title={cloudStatus === 'synced' ? `Saved to your Google-linked account${authUser?.email ? ` (${authUser.email})` : ''}.` : 'Only a local device copy is confirmed until the status says Saved to account.'}><span className="demo-pill-dot" /><span className="cloud-label-full">{topbarStatus}</span><span className="cloud-label-short">{compactCloudStatus}</span></span>
             <button className="theme-toggle" type="button" onClick={toggleColorMode} aria-label={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>{colorMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
             <div className="topbar-divider" />
             <div className="avatar avatar-top" aria-label={googleLinked ? `Signed in as ${authUser?.email ?? 'Google account'}` : 'Anonymous study workspace'} title={googleLinked ? authUser?.email : 'Anonymous study workspace'}>{profileText}</div>
           </div>
         </header>
 
-        <div className="page-content" key={view} aria-busy={!cloudReady}>
+        <div className="page-content" key={view} ref={pageContentRef} aria-busy={!cloudReady}>
           {cloudReady ? renderPage() : <div className="workspace-loading" role="status"><span className="loading-rule" /><div><strong>Opening your study desk…</strong><span>Getting the right saved workspace in place before you start.</span></div></div>}
         </div>
         <footer className="prototype-footer"><span>Learnloop · Level 1 beta</span><span>Learning follows your answers, not a guessed mastery score.</span></footer>

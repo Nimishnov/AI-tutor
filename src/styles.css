@@ -1,7 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
 :root {
   color-scheme: light;
-  font-family: 'DM Sans', 'Avenir Next', Avenir, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Avenir Next', Avenir, 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   color: var(--ink);
   background: var(--paper);
   font-synthesis: none;
@@ -2194,3 +2193,132 @@ body { font-size: 16px; line-height: 1.55; }
 .revision-topic-copy span, .revision-topic-copy em, .revision-topic-meta > span,
 .followup-disclaimer, .followup-total, .revision-evidence, .revision-footer-note { font-size: 14px; }
 @media (max-width: 720px) { .intro-copy { font-size: 16px; } }
+
+
+/* Quiet typography and clear account/help flows */
+:root { --serif: 'Avenir Next', Avenir, 'Segoe UI', system-ui, sans-serif; }
+body { font-family: 'Avenir Next', Avenir, 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+.page-intro h1, .dashboard-intro h1, .journey-page h1, .panel-heading h3,
+.hero-card h2, .cover-title, .desk-info h4, .stat-value, .dashboard-stat strong,
+.help-step h2, .signin-card h1 { font-family: inherit; font-weight: 650; letter-spacing: -.025em; }
+
+/* Metrics remain available on Home without creating four competing cards. */
+.dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.dashboard-stat {
+  min-height: 65px;
+  display: grid;
+  grid-template-columns: 25px auto 1fr;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 13px;
+  border-left: 1px solid var(--line);
+}
+.dashboard-stat:first-child { border-left: 0; }
+.dashboard-stat-icon { display: flex; align-items: center; }
+.dashboard-stat strong { font-size: 23px; line-height: 1; }
+.dashboard-stat > span:last-child { color: var(--muted); font-size: 13px; line-height: 1.25; }
+.dashboard-page { gap: 23px; }
+.dashboard-recent { box-shadow: none; }
+.dashboard-recent-row { min-height: 67px; }
+
+/* Help is a short, open reading list rather than another card dashboard. */
+.help-page { max-width: 940px; margin-inline: auto; gap: 21px; }
+.help-guide { border-top: 1px solid var(--line); }
+.help-step { display: grid; grid-template-columns: 36px minmax(0,1fr); gap: 14px; padding: 17px 4px; border-bottom: 1px solid var(--line); }
+.help-step-icon { width: 32px; height: 32px; display: grid; place-items: center; color: var(--cobalt-deep); background: var(--cobalt-soft); border-radius: 50%; }
+.help-step h2 { margin: 0 0 4px; font-size: 17px; line-height: 1.4; color: var(--ink); }
+.help-step p { margin: 0; max-width: 70ch; color: var(--muted-dark); font-size: 16px; line-height: 1.6; }
+.help-save-note { display: flex; align-items: flex-start; gap: 12px; padding: 15px 17px; color: var(--cobalt-deep); background: var(--cobalt-soft); border-left: 3px solid var(--cobalt); }
+.help-save-note > svg { flex: 0 0 auto; margin-top: 2px; }
+.help-save-note strong { font-size: 16px; }
+.help-save-note p { margin: 3px 0 0; color: var(--muted-dark); font-size: 15px; line-height: 1.55; }
+.help-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Google sign-in is a genuine access gate, not an optional workspace upsell. */
+.signin-gate { min-height: 100vh; display: grid; place-items: center; padding: 24px; color: var(--ink); background: var(--paper); }
+.signin-card { width: min(100%, 560px); padding: clamp(26px, 5vw, 46px); border: 1px solid var(--line); border-top: 4px solid var(--orange); background: var(--surface); box-shadow: var(--shadow); }
+.signin-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 38px; color: var(--ink); }
+.signin-brand strong { font-size: 20px; font-weight: 750; letter-spacing: -.04em; }
+.signin-card h1 { margin: 4px 0 12px; font-size: clamp(30px, 6vw, 40px); line-height: 1.15; }
+.signin-copy { max-width: 46ch; margin: 0 0 20px; color: var(--muted-dark); font-size: 17px; line-height: 1.6; }
+.signin-privacy { display: flex; align-items: flex-start; gap: 10px; margin: 0 0 20px; padding: 13px; color: var(--muted-dark); background: var(--surface-soft); font-size: 14px; line-height: 1.5; }
+.signin-privacy svg { flex: 0 0 auto; color: var(--cobalt); }
+.signin-google-button { width: 100%; min-height: 50px; display: flex; align-items: center; justify-content: center; gap: 11px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); background: var(--surface); font: inherit; font-size: 15px; font-weight: 650; cursor: pointer; }
+.signin-google-button:hover:not(:disabled) { border-color: var(--cobalt); background: var(--cobalt-soft); }
+.signin-google-button > svg:last-child { margin-left: auto; }
+.google-mark { width: 19px; height: 19px; flex: 0 0 19px; }
+.signin-existing-button { display: block; margin: 13px auto 0; padding: 8px 4px; border: 0; color: var(--cobalt-deep); background: transparent; font: inherit; font-size: 14px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.signin-note { display: flex; align-items: flex-start; gap: 9px; margin: 14px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.signin-note svg { flex: 0 0 auto; color: var(--cobalt); }
+.signin-footnote { margin: 20px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.signin-config-error { margin-top: 10px; padding: 14px; border: 1px solid var(--orange); color: var(--ink); background: var(--orange-soft); }
+.signin-config-error strong { font-size: 15px; }
+.signin-config-error p { margin: 5px 0 0; color: var(--muted-dark); font-size: 14px; line-height: 1.55; }
+.signin-error { margin-top: 14px; }
+
+/* Practice completion remains a learner decision; controls stack cleanly on narrow screens. */
+.practice-result-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.practice-result-actions .button, .followup-actions .button { min-height: 44px; font-size: 14px; }
+.followup-actions { justify-content: flex-start; }
+.chat-turn-focused { padding: 12px; border-left: 3px solid var(--orange); background: var(--orange-soft); }
+
+:root[data-theme="dark"] .signin-card { color: var(--ink); background: var(--surface); border-color: var(--line); border-top-color: var(--orange); }
+:root[data-theme="dark"] .signin-brand,
+:root[data-theme="dark"] .signin-card h1,
+:root[data-theme="dark"] .help-step h2 { color: var(--ink); }
+:root[data-theme="dark"] .signin-copy,
+:root[data-theme="dark"] .signin-note,
+:root[data-theme="dark"] .signin-footnote,
+:root[data-theme="dark"] .help-step p,
+:root[data-theme="dark"] .help-save-note p { color: var(--muted); }
+:root[data-theme="dark"] .signin-privacy,
+:root[data-theme="dark"] .signin-google-button { color: var(--ink); border-color: var(--line); background: var(--surface-soft); }
+:root[data-theme="dark"] .signin-config-error { color: var(--ink); background: var(--orange-soft); border-color: var(--orange); }
+:root[data-theme="dark"] .help-save-note { color: var(--cobalt-deep); background: var(--cobalt-soft); }
+:root[data-theme="dark"] .chat-turn-focused { background: var(--orange-soft); }
+
+@media (max-width: 760px) {
+  .dashboard-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .dashboard-stat { min-height: 58px; padding: 8px 10px; }
+  .dashboard-stat:nth-child(odd) { border-left: 0; }
+  .dashboard-stat:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .practice-result-actions { justify-content: flex-start; width: 100%; }
+}
+@media (max-width: 480px) {
+  .signin-gate { padding: 12px; }
+  .signin-card { padding: 24px 19px; }
+  .help-step { grid-template-columns: 30px minmax(0,1fr); gap: 10px; }
+  .help-step-icon { width: 28px; height: 28px; }
+  .help-step p { font-size: 15px; }
+  .practice-result-actions .button { width: 100%; }
+}
+
+
+/* Tablet widths need a narrower rail and a calmer two-column stat strip. */
+.dashboard-heading h1, .dashboard-section-heading h2 { font-family: inherit; font-weight: 650; }
+@media (max-width: 960px) and (min-width: 721px) {
+  .sidebar { width: 236px; flex-basis: 236px; padding-inline: 12px; }
+  .page-content { padding-inline: 26px; }
+  .topbar { padding-inline: 22px; }
+  .dashboard-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .dashboard-stat { min-height: 58px; }
+  .dashboard-stat:nth-child(odd) { border-left: 0; }
+  .dashboard-stat:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+
+@media (max-width: 720px) {
+  .cloud-label-full { display: none; }
+  .cloud-label-short { display: inline; }
+}
+@media (min-width: 721px) {
+  .cloud-label-full { display: inline; }
+  .cloud-label-short { display: none; }
+}

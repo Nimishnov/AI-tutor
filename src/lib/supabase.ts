@@ -45,7 +45,11 @@ function appRedirectUrl(): string {
 }
 
 export function isGoogleLinked(user: User | null): boolean {
-  return Boolean(user?.identities?.some((identity) => identity.provider === 'google'));
+  if (!user) return false;
+  const providers = user.app_metadata?.providers;
+  return user.identities?.some((identity) => identity.provider === 'google') === true
+    || user.app_metadata?.provider === 'google'
+    || (Array.isArray(providers) && providers.includes('google'));
 }
 
 /** Link Google to the current workspace; this preserves its auth.users ID and RLS-owned data. */

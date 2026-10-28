@@ -10,6 +10,7 @@ import type { StudyMaterial, ViewKey } from '../types';
 interface Props {
   materials: StudyMaterial[];
   activeMaterialId: string;
+  saveStatus: string;
   initialMode?: InputMode;
   onAddMaterial: (material: StudyMaterial, nextView?: ViewKey) => void;
   onSelectMaterial: (id: string) => void;
@@ -18,7 +19,7 @@ interface Props {
 
 type InputMode = 'upload' | 'paste' | 'question';
 
-export default function Materials({ materials, activeMaterialId, initialMode = 'upload', onAddMaterial, onSelectMaterial, onNavigate }: Props) {
+export default function Materials({ materials, activeMaterialId, saveStatus, initialMode = 'upload', onAddMaterial, onSelectMaterial, onNavigate }: Props) {
   const [mode, setMode] = useState<InputMode>(initialMode);
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
@@ -122,7 +123,7 @@ export default function Materials({ materials, activeMaterialId, initialMode = '
           )}
 
           {error && <div className="inline-error" role="alert">{error}</div>}
-          <div className="form-footer"><span className="privacy-note"><Check size={14} /> Saved on this device; synced when connected</span><button className="button button-primary" type="submit">{mode === 'question' ? 'Open this study thread' : 'Start a study session'} <ArrowRight size={16} /></button></div>
+          <div className="form-footer"><span className="privacy-note"><Check size={14} /> {saveStatus}</span><button className="button button-primary" type="submit">{mode === 'question' ? 'Open this study thread' : 'Start a study session'} <ArrowRight size={16} /></button></div>
         </form>
         <div className="prototype-note"><FileText size={15} /><span>PDFs need selectable text. This beta cannot read photographed pages or slide decks.</span></div>
       </section>

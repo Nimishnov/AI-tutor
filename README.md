@@ -1,22 +1,22 @@
 # Learnloop — a study desk that remembers what tripped you up
 
-Learnloop turns your own material into source-aware notes, patient explanations, practice, misconception-aware reteaching, follow-up checks, and revision. The Level 1 beta starts with a clean “Start your journey” screen, keeps one study thread per source in a left rail, and can link a learner’s Supabase workspace to Google for recovery across devices.
+Learnloop turns your own material into source-aware notes, patient explanations, practice, misconception-aware reteaching, follow-up checks, and revision. Google sign-in is required before the study workspace opens. After sign-in, the Level 1 beta starts with a clean “Start your journey” screen and keeps one study thread per source in a left rail.
 
 ## What is in this beta
 
 - Start from a selectable-text PDF, pasted notes, or one typed question; an optional sample lesson is clearly marked and never mixed into a new learner's blank workspace.
 - Each new source opens its own study tab. Drag tabs together or group them from the three-dot menu; split them through the menu or right-click. Grouping is organizational: sources and answer history stay separate.
 - A focused study thread offers notes, tutor, and practice as separate next steps. Home stays focused on real recorded stats and recent work.
-- After a correct first check, or after the same-concept follow-up following reteaching, a tab moves automatically into Completed. Its source, notes and answers remain there, and it can be reopened. Finishing early is also available.
+- A study tab stays active after a correct answer or reteach follow-up. The learner chooses **Finish this session** when ready; the completed tab, source, notes and answer history remain available for restoration.
 - Structured notes, concept tutoring, four-choice quizzes, cautious mistake hypotheses, alternate reteaching examples, follow-up questions, revision recommendations, and note-based flashcards.
 - A warm classroom-notebook visual system with readable type and accessible light/dark modes.
-- Supabase anonymous Auth, per-user Postgres workspaces and row-level security, a server-only AI Edge Function, daily quota, and optional “Continue with Google” identity linking.
+- Supabase temporary anonymous Auth for preserving browser work during sign-in, Google-required access, per-user Postgres workspaces and row-level security, a server-only AI Edge Function, and a daily quota.
 - A GitHub Actions workflow for static GitHub Pages at `/AI-tutor/`.
 
 ## 1. Create and configure Supabase
 
 1. Create a Supabase project. In **Project Settings → API Keys**, copy the **Project URL** and **Publishable key** (`sb_publishable_…`). These are browser-safe values. Never use a Supabase Secret or `service_role` key in the website.
-2. In **Authentication → Sign In / Providers**, enable **Anonymous Sign-Ins**. The app uses that session to create a private workspace before a learner links a permanent identity.
+2. In **Authentication → Sign In / Providers**, enable **Anonymous Sign-Ins**. This temporary session preserves a private browser workspace while the learner links Google; it does not unlock Learnloop.
 3. Apply the included migration and deploy the function, using the Supabase CLI:
 
    ```bash
@@ -35,7 +35,7 @@ Learnloop turns your own material into source-aware notes, patient explanations,
 
    The included `supabase/config.toml` keeps JWT verification enabled. Keep the AI key in Supabase Edge Function Secrets only.
 
-## 2. Set up Google sign-in (recommended before using on another device)
+## 2. Set up required Google sign-in
 
 Google sign-in links the current anonymous Supabase user rather than copying workspace rows to a new user. This keeps the same `auth.uid()` and its RLS-owned workspace.
 
@@ -46,7 +46,7 @@ Google sign-in links the current anonymous Supabase user rather than copying wor
 5. In Supabase **Authentication → URL Configuration**, set **Site URL** to `https://YOUR_GITHUB_USERNAME.github.io/AI-tutor/`. Add that exact URL to the allowed redirect URLs. For local development, optionally allow `http://localhost:5173/` too.
 6. If Google's consent screen is in **Testing**, add the intended test accounts as test users. For wider release, complete Google's verification/consent requirements for the scopes you request.
 
-The UI offers **Continue with Google** to link the current workspace. **Already have an account? Sign in** is an explicit account switch; it keeps the previous workspace separate rather than merging different people’s data. If OAuth has not been configured, the UI explains that instead of replacing local work.
+The app stays at the sign-in screen until Google authentication succeeds. **Continue with Google** links the temporary current workspace. **Already have an account? Sign in** is an explicit account switch; it keeps the previous workspace separate rather than merging different people’s data. If OAuth has not been configured, the UI explains the missing setup rather than allowing unsigned access.
 
 ## 3. Upload the source and deploy to GitHub Pages
 
@@ -70,12 +70,12 @@ The UI offers **Continue with Google** to link the current workspace. **Already 
 
 ## 4. First-use walkthrough
 
-1. A new learner sees **Start your journey**. Choose **Upload a PDF**, **Paste your notes**, or **Ask one question**. The optional sample is separate.
+1. A learner first sees the Google sign-in screen. After successful sign-in, a new learner sees **Start your journey**. Choose **Upload a PDF**, **Paste your notes**, or **Ask one question**. The optional sample is separate.
 2. Saving a source creates a new active study tab in the left rail and opens its study thread. Pick one next step: make notes, ask the tutor, or try a quick check.
-3. A wrong first response stays in Active while the tutor explains another way and presents a same-concept follow-up. Submitting that follow-up closes the active tab into **Completed**, regardless of whether it was right; the new result still determines revision suggestions. A correct first response also completes the tab.
+3. A wrong first response stays in Active while the tutor explains another way and presents a same-concept follow-up. Correct answers and follow-up answers do not finish a tab. Choose **Finish this session** to move it to **Completed**; the answer history remains saved.
 4. Drag an active tab onto another to group it, or use its three-dot menu. Right-click opens the same options. Touch and keyboard users can choose **Group with another tab** from the menu. Use **Separate this group** to ungroup it.
-5. Open **Completed** to reopen a finished thread. Open **Workspace settings** for a JSON backup or an explicitly confirmed clear action.
-6. Link Google from the left rail or welcome screen before using the same workspace on another device. After returning from Google, the app should show the linked email and Supabase cloud status.
+5. Open **Completed** to restore a finished thread. Home shows recent activity; a recent Tutor item reopens its saved question and answer. Open **How to use** for the short in-app guide. **Workspace settings** contains a JSON backup and an explicitly confirmed clear action.
+6. The header says **SAVED TO ACCOUNT** only after Supabase confirms a cloud save. If it says **SAVING TO ACCOUNT**, wait; **NOT SYNCED** means only the local device copy is confirmed.
 
 ## 5. Run locally
 
@@ -86,13 +86,13 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm build` checks and compiles the site. Outside Manus Preview, AI requests require the deployed Supabase function. Without Supabase configuration, the UI runs in local-only mode; Google and cloud sync are unavailable.
+`pnpm build` checks and compiles the site. Outside Manus Preview, AI requests require the deployed Supabase function. Supabase and Google OAuth must be configured to enter the application; without those settings, Learnloop shows a sign-in/configuration screen and keeps the workspace locked.
 
 ## Privacy and limits
 
-Anonymous Supabase workspaces are tied to the browser's saved auth session until the learner links Google. Clearing that session before linking may make an anonymous workspace unrecoverable; local-only browser data is not automatically uploaded. A Google identity switch opens that identity's own workspace and never merges two accounts. Download a workspace backup before clearing or switching if you need an extra copy.
+Temporary anonymous Supabase workspaces are tied to the browser's saved auth session until the learner links Google. Clearing that session before linking may make that temporary workspace unrecoverable. A Google identity switch opens that identity's own workspace and never merges two accounts. The header distinguishes account-synced data from an unsynced device copy. Download a workspace backup before clearing or switching if you need an extra copy.
 
-The tutor Edge Function allows up to 60 AI requests per anonymous user per UTC day. Anonymous quotas can be bypassed by creating additional accounts; configure Supabase Auth CAPTCHA or other abuse controls before a wide public launch. Row-level security protects workspace rows. Never put `OPENAI_API_KEY`, a Supabase Secret key, a service-role key, or a Google OAuth Client Secret in GitHub Pages variables, `VITE_*`, browser code, or committed files.
+The tutor Edge Function allows up to 60 AI requests per user per UTC day. Configure Supabase Auth CAPTCHA or other abuse controls before a wide public launch. Row-level security protects workspace rows. Never put `OPENAI_API_KEY`, a Supabase Secret key, a service-role key, or a Google OAuth Client Secret in GitHub Pages variables, `VITE_*`, browser code, or committed files.
 
 ## Key files
 

@@ -16,6 +16,7 @@ function normalizeWorkspace(value: unknown): LearningState {
   const materials = candidate.materials as StudyMaterial[];
   const notes = Array.isArray(candidate.notes) ? candidate.notes : [];
   const attempts = candidate.attempts;
+  const tutorExchanges = Array.isArray(candidate.tutorExchanges) ? candidate.tutorExchanges : [];
   const sessions = Array.isArray(candidate.sessions) ? candidate.sessions : [];
   if (typeof candidate.onboardingComplete !== 'boolean' && materials.length > 0 && materials.every((material) => material.origin === 'sample')) {
     return makeEmptyState();
@@ -50,6 +51,7 @@ function normalizeWorkspace(value: unknown): LearningState {
     materials,
     notes,
     attempts,
+    tutorExchanges,
     sessions,
     studyTabs: studyTabs.map((tab) => {
       const material = materials.find((item) => item.id === tab.materialId);
