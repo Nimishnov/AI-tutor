@@ -47,17 +47,39 @@ async function requestEnvelope(task: AITask, context: unknown): Promise<AIEnvelo
   return result;
 }
 
+function parseJsonObject(content: string): unknown {
+  const cleaned = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  try { return JSON.parse(cleaned); } catch { /* Look for one complete object inside surrounding text. */ }
+
+  const start = cleaned.indexOf('{');
+  if (start < 0) throw new Error('The tutor response was not in a usable format. Please try once more.');
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < cleaned.length; index += 1) {
+    const character = cleaned[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') inString = false;
+      continue;
+    }
+    if (character === '"') inString = true;
+    else if (character === '{') depth += 1;
+    else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        try { return JSON.parse(cleaned.slice(start, index + 1)); }
+        catch { throw new Error('The tutor returned an incomplete response. Please try again.'); }
+      }
+    }
+  }
+  throw new Error('The tutor returned an incomplete response. Please try again.');
+}
+
 async function requestJson<T>(task: AITask, context: unknown): Promise<T> {
   const envelope = await requestEnvelope(task, context);
-  const cleaned = envelope.content!.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  const first = cleaned.indexOf('{');
-  const last = cleaned.lastIndexOf('}');
-  if (first < 0 || last <= first) throw new Error('The tutor response was not in a usable format. Please try once more.');
-  try {
-    return JSON.parse(cleaned.slice(first, last + 1)) as T;
-  } catch {
-    throw new Error('The tutor returned an incomplete response. Please try again.');
-  }
+  return parseJsonObject(envelope.content!) as T;
 }
 
 function materialContext(material: StudyMaterial) {
@@ -95,12 +117,25 @@ export async function explainConcept(material: StudyMaterial, question: string):
   return result;
 }
 
-export async function generateQuizQuestion(material: StudyMaterial, topic: string): Promise<Omit<QuizQuestion, 'id'>> {
-  const result = await requestJson<Omit<QuizQuestion, 'id'>>('quiz', {
-    ...materialContext(material), topic
-  });
-  validateQuestion(result);
-  return result;
+export async function generateQuizQuestion(
+  material: StudyMaterial,
+  topic: string,
+  avoidQuestions: string[] = []
+): Promise<Omit<QuizQuestion, 'id'>> {
+  const recentQuestions = [...new Set(avoidQuestions.map((item) => item.trim()).filter(Boolean))].slice(0, 12);
+  let result: Omit<QuizQuestion, 'id'> | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    result = await requestJson<Omit<QuizQuestion, 'id'>>('quiz', {
+      ...materialContext(material), topic,
+      avoidQuestions: recentQuestions.map((item) => item.slice(0, 240))
+    });
+    validateQuestion(result);
+    const normalized = result.question.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const repeated = recentQuestions.some((item) => item.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === normalized);
+    if (!repeated) return result;
+    recentQuestions.unshift(result.question);
+  }
+  throw new Error('The tutor repeated a recent question. Try generating one more time.');
 }
 
 export async function analyzeMistake(

@@ -2322,3 +2322,46 @@ body { font-family: 'Avenir Next', Avenir, 'Segoe UI', system-ui, -apple-system,
   .cloud-label-full { display: inline; }
   .cloud-label-short { display: none; }
 }
+
+
+/* Tab actions escape the scrollable rail so Active and Completed menus stay visible. */
+.study-tab-menu {
+  position: fixed;
+  z-index: 2500;
+  top: 12px;
+  right: auto;
+  width: min(280px, calc(100vw - 24px));
+  max-height: min(72vh, 430px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgba(28, 33, 40, .24);
+}
+.study-tab-menu > button { min-height: 44px; }
+.study-tab-menu .tab-delete-action {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 6px 6px;
+  color: var(--orange);
+}
+.study-tab-menu .tab-delete-action:hover,
+.study-tab-menu .tab-delete-action:focus-visible {
+  color: var(--orange);
+  background: var(--orange-soft);
+}
+.study-tab-menu:focus-visible,
+.study-tab-menu button:focus-visible {
+  outline: 3px solid var(--cobalt);
+  outline-offset: 2px;
+}
+
+.study-tab-menu:hover,
+.study-tab-menu[aria-expanded="true"] {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--surface);
+}

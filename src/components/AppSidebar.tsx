@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowDownToLine, BookOpen, Brain, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck,
   FilePlus2, FileStack, FolderOpen, GraduationCap, Home, Layers2, MoreHorizontal,
-  NotebookPen, RotateCcw, Split, X
+  NotebookPen, RotateCcw, Split, Trash2, X
 } from 'lucide-react';
 import type { LearningState, StudyTab, ViewKey } from '../types';
 
@@ -23,6 +24,7 @@ interface Props {
   onMergeTabs: (sourceId: string, targetId: string) => void;
   onSplitGroup: (groupId: string) => void;
   onFinishTab: (tabId: string) => void;
+  onDeleteTab: (tabId: string) => void;
   onRestoreTab: (tabId: string) => void;
   onGoogleLink: () => void;
   onGoogleSwitch: () => void;
@@ -54,17 +56,61 @@ export default function AppSidebar(props: Props) {
   const {
     state, view, activeStudyTabId, mobileOpen, hasCloud,
     googleLinked, googleEmail, authBusy, authError, onCloseMobile, onNavigate,
-    onStartNew, onOpenTab, onMergeTabs, onSplitGroup, onFinishTab, onRestoreTab,
+    onStartNew, onOpenTab, onMergeTabs, onSplitGroup, onFinishTab, onDeleteTab, onRestoreTab,
     onGoogleLink, onGoogleSwitch, onExport, onClearWorkspace
   } = props;
   const [menuTabId, setMenuTabId] = useState<string | null>(null);
   const [groupChooserFor, setGroupChooserFor] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState({ left: 12, top: 12 });
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [completedOpen, setCompletedOpen] = useState(false);
   const activeTabs = useMemo(() => groupedEntries(state.studyTabs.filter((tab) => tab.status === 'active')), [state.studyTabs]);
   const completedTabs = useMemo(() => [...state.studyTabs]
     .filter((tab) => tab.status === 'completed')
     .sort((a, b) => (b.completedAt ?? b.createdAt).localeCompare(a.completedAt ?? a.createdAt)), [state.studyTabs]);
+
+  useLayoutEffect(() => {
+    if (!menuTabId) return;
+    const placeMenu = () => {
+      const trigger = triggerRefs.current.get(menuTabId);
+      const menu = menuRef.current;
+      if (!trigger || !menu) return;
+      const anchor = trigger.getBoundingClientRect();
+      const popover = menu.getBoundingClientRect();
+      const width = popover.width || 258;
+      const height = popover.height || 180;
+      const left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8));
+      const below = anchor.bottom + 4;
+      const top = below + height <= window.innerHeight - 8
+        ? below
+        : Math.max(8, anchor.top - height - 4);
+      setMenuPosition((current) => current.left === left && current.top === top ? current : { left, top });
+    };
+    placeMenu();
+    window.addEventListener('resize', placeMenu);
+    return () => window.removeEventListener('resize', placeMenu);
+  }, [menuTabId, groupChooserFor, activeTabs.length, completedTabs.length]);
+
+  useEffect(() => {
+    if (!menuTabId) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target) || triggerRefs.current.get(menuTabId)?.contains(target)) return;
+      setMenuTabId(null);
+      setGroupChooserFor(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setMenuTabId(null); setGroupChooserFor(null); }
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [menuTabId]);
 
   const dropOn = (event: React.DragEvent, targetId: string) => {
     event.preventDefault();
@@ -97,14 +143,14 @@ export default function AppSidebar(props: Props) {
         <button
           className="study-tab-menu-trigger"
           type="button"
+          ref={(node) => { if (node) triggerRefs.current.set(tab.id, node); else triggerRefs.current.delete(tab.id); }}
           aria-label={`Options for ${tab.title}`}
           aria-haspopup="menu"
           aria-expanded={menuTabId === tab.id}
           onClick={() => { setMenuTabId((current) => current === tab.id ? null : tab.id); setGroupChooserFor(null); }}
-          onContextMenu={(event) => { event.preventDefault(); setMenuTabId(tab.id); }}
         ><MoreHorizontal size={18} /></button>
-        {menuTabId === tab.id && (
-          <div className="study-tab-menu" role="menu" aria-label={`${tab.title} options`}>
+        {menuTabId === tab.id && createPortal(
+          <div ref={menuRef} className="study-tab-menu" role="menu" aria-label={`${tab.title} options`} style={{ left: menuPosition.left, top: menuPosition.top }}>
             {tab.status === 'active' ? (
               <button type="button" role="menuitem" onClick={() => { onFinishTab(tab.id); setMenuTabId(null); }}><Check size={14} /> Finish this session</button>
             ) : (
@@ -127,7 +173,9 @@ export default function AppSidebar(props: Props) {
                 )}
               </>
             ) : null}
-          </div>
+            <button type="button" role="menuitem" className="tab-delete-action" onClick={() => { onDeleteTab(tab.id); setMenuTabId(null); setGroupChooserFor(null); }}><Trash2 size={14} /> Delete study tab</button>
+          </div>,
+          document.body
         )}
       </div>
     );

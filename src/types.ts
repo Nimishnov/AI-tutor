@@ -53,6 +53,7 @@ export interface QuizQuestion {
 
 export interface QuizAttempt {
   id: string;
+  materialId?: string;
   question: string;
   concept: string;
   selectedId: string;

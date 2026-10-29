@@ -8,13 +8,15 @@ When you finish, the website address will look like:
 https://YOUR-GITHUB-USERNAME.github.io/AI-tutor/
 ```
 
-GitHub Pages hosts the website. Supabase stores each learner’s private study workspace and runs the AI function. Google sign-in links the learner’s anonymous Supabase workspace so it can be recovered on another device. The AI provider key stays in Supabase; it does not go in the website or GitHub repository.
+GitHub Pages hosts the website. Supabase stores each learner’s private study workspace and runs the AI function. Google sign-in is required before anyone can use the study workspace. Supabase may create a temporary anonymous workspace behind the sign-in screen so existing browser work can be linked to Google without losing its user ID. The AI provider key stays in Supabase; it does not go in the website or GitHub repository.
 
 ## Before you start
 
 You will need a GitHub account and a Supabase account. Download the Learnloop source ZIP attached to the message that came with this guide. The ZIP already contains the hidden `.github` workflow folder, the Supabase migration, the Edge Function, and this website’s setup files. Do not unzip its contents into an extra nested folder.
 
 For the simplest upload, install [GitHub Desktop](https://desktop.github.com/). You will also need the Supabase CLI. Follow the [official Supabase CLI installation guide](https://supabase.com/docs/guides/local-development/cli/getting-started). On macOS, the guide gives a Homebrew command. On Windows, it documents Scoop. On Linux, use its package instructions. Check that the install worked by opening a terminal and running `supabase --version`.[1]
+
+**Windows PowerShell shortcut:** if `supabase` is not recognized and PowerShell says scripts are disabled when you run `npx`, use `npx.cmd supabase` instead. For example, `npx.cmd supabase --version`. In the commands below, put `npx.cmd` before each `supabase` command. This uses the Windows command shim and avoids the blocked `npx.ps1` script; do not change your computer's execution policy just for this project.
 
 ## Part 1 — Set up your Supabase project
 
@@ -27,14 +29,14 @@ For the simplest upload, install [GitHub Desktop](https://desktop.github.com/). 
 
 ### 2. Turn on anonymous sign-in
 
-The app uses anonymous sign-in so it can save data to a user-specific row without asking for an email or password.
+The app uses Supabase anonymous sign-in behind the scenes to preserve a browser workspace while Google OAuth is being linked. This does **not** let a learner into the app: the study workspace stays locked until Google sign-in succeeds.
 
 1. In the Supabase project dashboard, open **Authentication**.
 2. Open **Sign In / Providers** (the label may be slightly different in a future dashboard layout).
 3. Find **Anonymous Sign-Ins** and turn it on.
 4. Save the change.
 
-Anonymous accounts are tied to the browser’s saved session. A learner can link Google below to keep the same Supabase user ID and workspace. Until that link succeeds, clearing browser storage or switching devices can make an anonymous workspace unrecoverable. Supabase describes this limitation in its [anonymous sign-in guide].[2]
+Anonymous accounts are tied to the browser’s saved session. The app’s required Google step links the account and keeps the same Supabase user ID and workspace. Until that link succeeds, the learner cannot enter the study workspace; clearing browser storage can make the temporary copy unrecoverable. Supabase describes this limitation in its [anonymous sign-in guide].[2]
 
 ### 2A. Set up Google sign-in
 
@@ -47,7 +49,7 @@ This step creates the Google provider connection used by the **Continue with Goo
 5. In Supabase, open **Authentication → URL Configuration**. Set **Site URL** to `https://YOUR-GITHUB-USERNAME.github.io/AI-tutor/`, then add that exact URL under **Redirect URLs**. If testing locally, also allow `http://localhost:5173/`.
 6. If Google's consent screen is still in **Testing**, add your Google account as a test user.
 
-The app’s **Continue with Google** button links the current anonymous workspace. If you already have a different Google-linked workspace, use **Already have an account? Sign in**; that is an explicit account switch, not a merge. If Google is not configured, the app keeps the current workspace and shows an explanation.
+The app requires Google authentication before showing any study materials or tools. **Continue with Google** links the current temporary workspace so its user ID and data are preserved. If you already have a different Google-linked workspace, use **Already have an account? Sign in**; this switches to that workspace and does not merge accounts. If Google is not configured, the app remains locked and explains which configuration is missing.
 
 ### 3. Copy the two browser-safe project values
 
@@ -108,6 +110,8 @@ The AI function needs an API key from an OpenAI-compatible model provider. This 
    ```
 
 6. In Supabase, check **Edge Functions** and confirm that `tutor` appears as deployed.
+
+On Windows PowerShell, run the deploy from the extracted project folder as `npx.cmd supabase functions deploy tutor --project-ref YOUR_PROJECT_REF`. Use the same project reference shown in the Supabase dashboard. The latest function also accepts common equivalent JSON field names and code-fenced provider output, gives the learner a retryable task-specific message when a response is genuinely incomplete, and asks Practice for varied questions. Redeploy it after replacing the source. This update does not add a database table or require a new migration.
 
 Put provider keys only in Supabase Edge Function Secrets. Supabase documents both the Dashboard secrets form and how functions read these values.[4] Do not add `OPENAI_API_KEY` to GitHub, the `.env.example` file, or any variable beginning with `VITE_`.
 
@@ -191,11 +195,11 @@ The first deployment can take several minutes. Do not judge the result until the
 
 ## Part 4 — Check that the app works
 
-1. Open the site link. A new learner should see **Start your journey**, not a pre-filled results dashboard. Choose **Upload a PDF**, **Paste your notes**, or **Ask one question**. The sample lesson is optional and clearly marked.
+1. Open the site link. A learner must see the Google sign-in screen first. After sign-in succeeds, a new learner should see **Start your journey**, not a pre-filled results dashboard. Choose **Upload a PDF**, **Paste your notes**, or **Ask one question**. The sample lesson is optional and clearly marked.
 2. After saving material, confirm a new study tab appears on the left and opens a thread with three choices: notes, tutor, or a quick check. Home should contain recorded stats and recent work only.
 3. Drag two study tabs together to group them, or use the tab’s three-dot menu. Right-click also opens the menu. On touch screens, use the menu to group or separate tabs. Grouping does not combine their learning histories.
-4. In **Practice**, answer the first check correctly and confirm the tab moves to **Completed**. Reopen it, miss the first check, use the reteach and submit the same-concept follow-up; it should again move to **Completed** while keeping the answer record. Reopen from **Completed** if needed.
-5. If Supabase is configured, the topbar should show **SAVED TO CLOUD**. If the learner is still anonymous, choose **Continue with Google** and complete the consent flow; after returning, the linked Google email should appear. If it says **SAVED ON THIS DEVICE** or **OFFLINE**, confirm the GitHub Actions variables, migration and Anonymous Sign-Ins setting.
+4. In **Practice**, answer the first check correctly. The tab should remain active; choose **Finish this session** to move it to **Completed**. The tab also remains active after a reteach follow-up until the learner chooses Finish. Reopen a completed tab from **Completed** if needed.
+5. Google sign-in must succeed before the workspace opens. After returning from Google, the signed-in email should appear. The header says **SAVED TO ACCOUNT** only after Supabase confirms a save; during a save it says **SAVING TO ACCOUNT**, and in an offline or local-only state it explicitly says the device copy is **NOT SYNCED**. If account saving fails, confirm the GitHub Actions variables, migration, Anonymous Sign-Ins setting and Google OAuth configuration.
 6. Use the moon/sun button to compare light and dark modes. To save a backup or clear data, open **Workspace settings** at the bottom of the sidebar.
 
 ## If something goes wrong
@@ -204,9 +208,11 @@ The first deployment can take several minutes. Do not judge the result until the
 
 **The Actions build fails.** Open the failed run and click the first step marked with a red X to see its message. Confirm that the files were copied to the repository root and that both GitHub Actions variables have the exact names above. If you changed the repository name, update `VITE_BASE_PATH` in the workflow to `/<your-repository-name>/`, then commit and push again.
 
-**The topbar says SAVED ON THIS DEVICE or OFFLINE.** Confirm the two repository variables match your Supabase Project URL and Publishable key. Confirm Anonymous Sign-Ins are enabled and that `supabase db push` completed against the same project. Push a new commit or rerun the Actions workflow after adding the variables so the site is rebuilt.
+**The sign-in screen says Supabase is not configured, or the header says DEVICE ONLY / OFFLINE.** Confirm the two repository variables match your Supabase Project URL and Publishable key. Confirm Anonymous Sign-Ins are enabled, Google OAuth is configured, and `supabase db push` completed against the same project. Push a new commit or rerun the Actions workflow after adding the variables so the site is rebuilt.
 
-**AI requests fail but the rest of the site works.** Confirm `OPENAI_API_KEY` is set under Supabase **Edge Functions → Secrets** and that `supabase functions deploy tutor` completed. Check that your provider key is active and has available usage. Never paste the key into GitHub or into a support chat.
+**Notes or Tutor says the AI response was incomplete.** The source and question stay saved; use the retry button. If you recently replaced the source code, redeploy the Edge Function from the project folder. In Windows PowerShell, run `npx.cmd supabase functions deploy tutor --project-ref YOUR_PROJECT_REF`. Then open Supabase **Edge Functions → tutor → Invocations/Logs** and check the new invocation. The updated function accepts common provider JSON variations, but it cannot repair a provider error, an exhausted quota, or a response with no usable answer.
+
+**AI requests fail but the rest of the site works.** Confirm `OPENAI_API_KEY` is set under Supabase **Edge Functions → Secrets** and that the `tutor` function deployment completed. Check that your provider key is active, the configured base URL/model belong to that provider, and the account has available usage. Never paste the key into GitHub or a support chat.
 
 **Google sign-in does not start or return to the site.** Confirm Google is enabled in Supabase, the Google OAuth Client ID and Client Secret were saved in Supabase, the Google callback is exactly `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`, and the GitHub Pages URL is in Supabase’s allowed redirect URLs. For linking an anonymous workspace, enable manual identity linking if that option is shown.
 

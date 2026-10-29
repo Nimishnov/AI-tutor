@@ -298,7 +298,7 @@ export default function App() {
   const recordAttempt = (attempt: QuizAttempt) => {
     setState((current) => ({
       ...current,
-      attempts: [attempt, ...current.attempts],
+      attempts: [{ ...attempt, materialId: attempt.materialId ?? activeMaterial.id }, ...current.attempts],
       sessions: attempt.isFollowUp ? current.sessions : [{
         id: createId('activity'), title: `Practice · ${attempt.concept}`,
         subject: activeMaterial.subject, materialId: activeMaterial.id, createdAt: attempt.createdAt, destination: 'practice'
@@ -366,6 +366,29 @@ export default function App() {
     });
     if (state.activeStudyTabId === tabId && ['study', 'practice'].includes(view)) setView('dashboard');
     setToast('Session finished and moved to Completed. Your source, notes, and answers are still saved.');
+  };
+
+  const deleteStudyTab = (tabId: string) => {
+    const tab = state.studyTabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const confirmed = window.confirm(`Delete the study tab “${tab.title}”? This removes only the tab. The material, notes, Tutor conversation, and quiz history stay in your Library and Home history.`);
+    if (!confirmed) return;
+    const wasSelected = state.activeStudyTabId === tabId;
+    setState((current) => {
+      const remaining = current.studyTabs.filter((item) => item.id !== tabId);
+      const groupCounts = new Map<string, number>();
+      remaining.forEach((item) => { if (item.groupId) groupCounts.set(item.groupId, (groupCounts.get(item.groupId) ?? 0) + 1); });
+      const studyTabs = remaining.map((item) => item.groupId && (groupCounts.get(item.groupId) ?? 0) < 2 ? { ...item, groupId: undefined } : item);
+      const nextTab = studyTabs.find((item) => item.status === 'active') ?? studyTabs[0];
+      return {
+        ...current,
+        studyTabs,
+        activeStudyTabId: current.activeStudyTabId === tabId ? nextTab?.id ?? null : current.activeStudyTabId,
+        activeMaterialId: wasSelected && nextTab ? nextTab.materialId : current.activeMaterialId
+      };
+    });
+    if (wasSelected) setView('dashboard');
+    setToast('Study tab removed. Your source, notes, conversations, and answer history remain saved.');
   };
 
   const reopenStudyTabInPlace = (tabId: string) => {
@@ -464,9 +487,9 @@ export default function App() {
       case 'notes':
         return <Notes material={activeMaterial} note={activeNote} materials={state.materials} onSelectMaterial={selectMaterial} onSaveNote={saveNote} onNavigate={navigate} />;
       case 'tutor':
-        return <Tutor material={activeMaterial} exchanges={state.tutorExchanges} focusExchangeId={focusTutorExchangeId} onRecordSession={(title, exchangeId) => { recordActivity(`Tutor · ${title}`, activeMaterial, 'tutor', exchangeId); }} onSaveExchange={saveTutorExchange} />;
+        return <Tutor material={activeMaterial} exchanges={state.tutorExchanges} focusExchangeId={focusTutorExchangeId} onClearFocus={() => setFocusTutorExchangeId(null)} onRecordSession={(title, exchangeId) => { recordActivity(`Tutor · ${title}`, activeMaterial, 'tutor', exchangeId); }} onSaveExchange={saveTutorExchange} />;
       case 'practice':
-        return <Practice material={activeMaterial} onRecordAttempt={recordAttempt} onRecordSession={(title) => recordActivity(title, activeMaterial, 'practice')} onCompleteSession={() => { if (activeTab) finishStudyTab(activeTab.id); }} onReopenSession={() => { if (activeTab) reopenStudyTabInPlace(activeTab.id); }} />;
+        return <Practice material={activeMaterial} previousQuestions={state.attempts.filter((attempt) => attempt.materialId === activeMaterial.id).map((attempt) => attempt.question)} onRecordAttempt={recordAttempt} onRecordSession={(title) => recordActivity(title, activeMaterial, 'practice')} onCompleteSession={() => { if (activeTab) finishStudyTab(activeTab.id); }} onReopenSession={() => { if (activeTab) reopenStudyTabInPlace(activeTab.id); }} />;
       case 'revision':
         return <Revision state={state} onNavigate={navigate} />;
       case 'help':
@@ -493,7 +516,7 @@ export default function App() {
         googleLinked={googleLinked} googleEmail={authUser?.email} authBusy={authBusy} authError={authError}
         onCloseMobile={() => setMobileNavOpen(false)} onNavigate={navigate} onStartNew={startNewStudy}
         onOpenTab={openStudyTab} onMergeTabs={mergeStudyTabs} onSplitGroup={splitStudyGroup}
-        onFinishTab={finishStudyTab} onRestoreTab={restoreStudyTab}
+        onFinishTab={finishStudyTab} onDeleteTab={deleteStudyTab} onRestoreTab={restoreStudyTab}
         onGoogleLink={() => void startGoogleLink()} onGoogleSwitch={() => void startGoogleSwitch()}
         onExport={() => { downloadWorkspace(state); setToast('Workspace backup downloaded to your device.'); }}
         onClearWorkspace={clearWorkspace}

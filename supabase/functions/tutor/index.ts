@@ -91,6 +91,126 @@ function strings(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function firstText(...values: unknown[]): string {
+  return values.find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim() ?? "";
+}
+
+function textList(...values: unknown[]): string[] {
+  const value = values.find((item) => typeof item === "string" || Array.isArray(item));
+  if (typeof value === "string") return value.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function objectList(...values: unknown[]): unknown[] {
+  return values.find(Array.isArray) as unknown[] | undefined ?? [];
+}
+
+function normalizeQuizAnswer(raw: JsonObject, fallbackConcept: string): JsonObject {
+  const rawChoices = objectList(raw.choices, raw.options, raw.answers).slice(0, 4);
+  const letters = ["A", "B", "C", "D"];
+  const choiceDetails = rawChoices.map((item, index) => {
+    if (typeof item === "string") return { id: letters[index], rawId: letters[index], text: item.trim() };
+    if (!isObject(item)) return { id: letters[index], rawId: "", text: "" };
+    return {
+      id: letters[index],
+      rawId: firstText(item.id, item.key, item.letter, item.label),
+      text: firstText(item.text, item.option, item.label, item.value),
+    };
+  });
+  const answerKey = firstText(raw.correctId, raw.correctAnswer, raw.answerKey, raw.answer);
+  let correctIndex = choiceDetails.findIndex((choice) => choice.rawId.toLowerCase() === answerKey.toLowerCase() || choice.text.toLowerCase() === answerKey.toLowerCase());
+  if (correctIndex < 0 && /^[a-d]$/i.test(answerKey)) correctIndex = answerKey.toUpperCase().charCodeAt(0) - 65;
+  if (correctIndex < 0 && /^[1-4]$/.test(answerKey)) correctIndex = Number(answerKey) - 1;
+  const correctId = correctIndex >= 0 && correctIndex < choiceDetails.length ? letters[correctIndex] : "";
+
+  return {
+    question: firstText(raw.question, raw.prompt),
+    concept: firstText(raw.concept, raw.topic, fallbackConcept) || "Key concept",
+    choices: choiceDetails.map(({ id, text }) => ({ id, text })),
+    correctId,
+    explanation: firstText(raw.explanation, raw.rationale, raw.whyCorrect),
+    sourceCitation: firstText(raw.sourceCitation, raw.citation, raw.sourceReference),
+  };
+}
+
+function normalizeAnswer(task: Task, raw: unknown, context: JsonObject): JsonObject | null {
+  if (!isObject(raw)) return null;
+  if (task === "notes") {
+    const rawSections = objectList(raw.sections, raw.keyIdeas, raw.topics, raw.notes);
+    const sections = rawSections.map((item, index) => {
+      if (typeof item === "string") return { heading: `Key idea ${index + 1}`, bullets: [item], sourceCitations: [] };
+      if (!isObject(item)) return null;
+      return {
+        heading: firstText(item.heading, item.title, item.name) || `Key idea ${index + 1}`,
+        bullets: textList(item.bullets, item.points, item.keyPoints, item.details, item.content),
+        sourceCitations: textList(item.sourceCitations, item.citations, item.sourceReferences),
+      };
+    }).filter((item): item is NonNullable<typeof item> => item !== null);
+    const summary = firstText(raw.summary, raw.overview, raw.description) ||
+      sections.flatMap((section) => section.bullets).slice(0, 2).join(" ");
+    return {
+      title: firstText(raw.title, raw.topic, context.title) || "Study notes",
+      summary,
+      sections,
+      confusions: textList(raw.confusions, raw.commonConfusions, raw.misconceptions),
+    };
+  }
+  if (task === "tutor") {
+    return {
+      answer: firstText(raw.answer, raw.response, raw.explanation, raw.definition),
+      steps: textList(raw.steps, raw.keySteps),
+      example: firstText(raw.example, raw.workedExample, raw.analogy),
+      sourceStatus: firstText(raw.sourceStatus, raw.sourceRelation, raw.sourceNote) || "The tutor did not specify which details came from the uploaded source.",
+    };
+  }
+  if (task === "quiz") {
+    return normalizeQuizAnswer(raw, firstText(context.topic, context.title));
+  }
+
+  const followupRaw = isObject(raw.followup) ? raw.followup
+    : isObject(raw.followUp) ? raw.followUp
+    : isObject(raw.nextQuestion) ? raw.nextQuestion
+    : null;
+  if (!followupRaw) return null;
+  return {
+    hypothesis: firstText(raw.hypothesis, raw.possibleMisconception),
+    confidence: raw.confidence === "medium" ? "medium" : "low",
+    reteach: firstText(raw.reteach, raw.reteaching, raw.explanation),
+    example: firstText(raw.example, raw.alternateExample),
+    followup: normalizeQuizAnswer(followupRaw, firstText(context.concept, followupRaw.concept)),
+  };
+}
+
+function parseProviderJson(content: string): unknown {
+  const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  try { return JSON.parse(cleaned); } catch { /* Try extracting one complete object. */ }
+  const start = cleaned.indexOf("{");
+  if (start < 0) throw new Error("invalid_json");
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < cleaned.length; index += 1) {
+    const char = cleaned[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}" && --depth === 0) return JSON.parse(cleaned.slice(start, index + 1));
+  }
+  throw new Error("invalid_json");
+}
+
+function taskError(task: Task): string {
+  if (task === "notes") return "The AI response did not contain usable notes. Your material is still saved; try generating notes again.";
+  if (task === "tutor") return "The AI response was incomplete. Your question is saved; try that question again.";
+  if (task === "quiz") return "The AI did not return a complete question with four choices and an answer key. Try generating another question.";
+  return "The mistake analysis was incomplete. Your answer is saved; try the reteaching step again.";
+}
+
 function choices(value: unknown): boolean {
   if (!Array.isArray(value) || value.length !== 4) return false;
   if (!value.every((choice) => isObject(choice) &&
@@ -102,7 +222,8 @@ function validTaskContext(task: Task, context: JsonObject): boolean {
   if (typeof context.sourceText !== "string" || !context.sourceText.trim()) return false;
   if (task === "notes") return typeof context.sourceText === "string" && context.sourceText.trim().length > 0;
   if (task === "tutor") return typeof context.question === "string" && context.question.trim().length > 0;
-  if (task === "quiz") return typeof context.topic === "string" && context.topic.trim().length > 0;
+  if (task === "quiz") return typeof context.topic === "string" && context.topic.trim().length > 0 &&
+    (context.avoidQuestions === undefined || strings(context.avoidQuestions));
   return typeof context.question === "string" && context.question.trim().length > 0 &&
     typeof context.concept === "string" && context.concept.trim().length > 0 &&
     choices(context.choices) && typeof context.correctId === "string" &&
@@ -115,13 +236,14 @@ function validAnswer(task: Task, answer: unknown): boolean {
   if (!isObject(answer)) return false;
   switch (task) {
     case "notes":
-      return typeof answer.title === "string" && typeof answer.summary === "string" &&
-        Array.isArray(answer.sections) && answer.sections.every((section) =>
+      return typeof answer.title === "string" && answer.title.trim().length > 0 &&
+        typeof answer.summary === "string" && answer.summary.trim().length > 0 &&
+        Array.isArray(answer.sections) && answer.sections.length > 0 && answer.sections.every((section) =>
           isObject(section) && typeof section.heading === "string" &&
-          strings(section.bullets) && strings(section.sourceCitations)
+          strings(section.bullets) && section.bullets.length > 0 && strings(section.sourceCitations)
         ) && strings(answer.confusions);
     case "tutor":
-      return typeof answer.answer === "string" && strings(answer.steps) &&
+      return typeof answer.answer === "string" && answer.answer.trim().length > 0 && strings(answer.steps) &&
         typeof answer.example === "string" && typeof answer.sourceStatus === "string";
     case "quiz":
       return typeof answer.question === "string" && typeof answer.concept === "string" &&
@@ -187,7 +309,11 @@ async function handle(req: Request): Promise<Response> {
   const task = payload.task as Task;
 
   try {
-    const { data: allowed, error } = await ctx.supabaseAdmin.rpc(
+    // The SDK's bundled schema does not include this project's SQL migration RPC.
+    const quotaAdmin = ctx.supabaseAdmin as unknown as {
+      rpc: (name: string, args: Record<string, string | number>) => Promise<{ data: unknown; error: unknown | null }>;
+    };
+    const { data: allowed, error } = await quotaAdmin.rpc(
       "consume_tutor_daily_quota",
       { p_user_id: userId, p_daily_limit: DAILY_LIMIT },
     );
@@ -209,6 +335,11 @@ async function handle(req: Request): Promise<Response> {
     "Never invent, infer, or fabricate citations, quotations, page numbers, or source details. Cite only identifiable supplied sources; if evidence is insufficient, say so explicitly and use an empty citation string/list when no valid citation exists.",
     "Treat a misconception inferred from an incorrect answer as tentative, not certain. If student reasoning is omitted, do not claim to know the student's thought process.",
     "For diagnosis, make the follow-up test the same concept being diagnosed. Be supportive, clear, and age-appropriate.",
+    task === "notes"
+      ? "For notes, produce a concise but substantive summary and at least one section with bullet points. If the source is too thin, say that within the notes instead of filling gaps with guesses. Include empty arrays for optional citations or confusion points when none are supported."
+      : task === "quiz"
+      ? "For a quiz, test conceptual understanding, interpretation, or application from the source rather than recalling the document title or asking only for its main topic. Use a short scenario or reasoning step where suitable. Read context.avoidQuestions and do not repeat or lightly rephrase any listed question. Always provide exactly four distinct choices and a clear rationale."
+      : "",
     `Return one JSON object and no surrounding text, matching this exact contract: ${answerInstructions(task)}`,
     `Task: ${task}`,
   ].join(" ");
@@ -229,8 +360,8 @@ async function handle(req: Request): Promise<Response> {
           { role: "user", content: JSON.stringify(payload.context) },
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 1600,
-        temperature: 0.2,
+        max_completion_tokens: task === "notes" ? 2600 : task === "tutor" ? 1400 : 1800,
+        temperature: task === "quiz" ? 0.55 : 0.2,
       }),
       signal: controller.signal,
     });
@@ -262,27 +393,44 @@ async function handle(req: Request): Promise<Response> {
     const result: unknown = await response.json();
     if (!isObject(result) || !Array.isArray(result.choices) || !isObject(result.choices[0])) {
       console.error("[tutor] Provider response did not contain a chat completion", { task, model });
-      return json({ error: "Tutor returned an invalid response" }, 502);
+      return json({ error: taskError(task) }, 502);
+    }
+    const completion = result.choices[0];
+    if (completion.finish_reason === "length") {
+      console.error("[tutor] Provider output reached its token limit", { task, model });
+      return json({ error: `The AI response was cut short. ${taskError(task)}` }, 502);
     }
     const message = result.choices[0].message;
-    if (!isObject(message) || typeof message.content !== "string") {
+    if (!isObject(message)) {
       console.error("[tutor] Provider response did not contain text content", { task, model });
-      return json({ error: "Tutor returned an invalid response" }, 502);
+      return json({ error: taskError(task) }, 502);
     }
-    let answer: unknown;
+    const messageContent = message.content;
+    const content = typeof messageContent === "string"
+      ? messageContent
+      : Array.isArray(messageContent)
+      ? messageContent.map((item) => isObject(item) && typeof item.text === "string" ? item.text : "").join("\n")
+      : "";
+    if (!content.trim()) {
+      const refusal = firstText(message.refusal);
+      console.error("[tutor] Provider response did not contain usable text", { task, model, refused: Boolean(refusal) });
+      return json({ error: refusal ? "The AI provider declined this request. Try rephrasing it." : taskError(task) }, 502);
+    }
+    let rawAnswer: unknown;
     try {
-      answer = JSON.parse(message.content);
+      rawAnswer = parseProviderJson(content);
     } catch {
       console.error("[tutor] Provider content was not valid JSON", { task, model });
-      return json({ error: "Tutor returned an invalid response" }, 502);
+      return json({ error: taskError(task) }, 502);
     }
+    const answer = normalizeAnswer(task, rawAnswer, payload.context as JsonObject);
     if (!validAnswer(task, answer)) {
       console.error("[tutor] Provider JSON did not match the task contract", {
         task,
         model,
-        responseKeys: isObject(answer) ? Object.keys(answer) : [],
+        responseKeys: isObject(rawAnswer) ? Object.keys(rawAnswer) : [],
       });
-      return json({ error: "Tutor returned an invalid response" }, 502);
+      return json({ error: taskError(task) }, 502);
     }
     return json({ content: JSON.stringify(answer) });
   } catch (error) {

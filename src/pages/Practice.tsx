@@ -10,6 +10,7 @@ import type { AIMisconception, QuizAttempt, QuizQuestion, StudyMaterial } from '
 
 interface Props {
   material: StudyMaterial;
+  previousQuestions: string[];
   onRecordAttempt: (attempt: QuizAttempt) => void;
   onRecordSession: (title: string) => void;
   onCompleteSession: () => void;
@@ -22,7 +23,7 @@ function asQuestion(value: Omit<QuizQuestion, 'id'>, isFollowUp = false): QuizQu
   return { ...value, id: createId('question'), isFollowUp };
 }
 
-export default function Practice({ material, onRecordAttempt, onRecordSession, onCompleteSession, onReopenSession }: Props) {
+export default function Practice({ material, previousQuestions, onRecordAttempt, onRecordSession, onCompleteSession, onReopenSession }: Props) {
   const [question, setQuestion] = useState<QuizQuestion | null>(material.id === demoMaterialId ? firstQuestion : null);
   const [stage, setStage] = useState<QuizStage>(material.id === demoMaterialId ? 'pick' : 'ready');
   const [selected, setSelected] = useState('');
@@ -45,7 +46,7 @@ export default function Practice({ material, onRecordAttempt, onRecordSession, o
     onReopenSession();
     setBusy(true); setError('');
     try {
-      const generated = await generateQuizQuestion(material, topic || material.title);
+      const generated = await generateQuizQuestion(material, topic || material.title, previousQuestions);
       setQuestion(asQuestion(generated)); setStage('pick'); setSelected(''); setAnalysis(null); setReasoning('');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'A question could not be generated.');
@@ -58,7 +59,7 @@ export default function Practice({ material, onRecordAttempt, onRecordSession, o
     const isCorrect = choiceId === current.correctId;
     const now = new Date().toISOString();
     onRecordAttempt({
-      id: createId('attempt'), question: current.question, concept: current.concept,
+      id: createId('attempt'), materialId: material.id, question: current.question, concept: current.concept,
       selectedId: choiceId, selectedText: choice?.text ?? 'No answer selected',
       correctId: current.correctId, correctText: answer?.text ?? 'Answer unavailable',
       isCorrect, isFollowUp: Boolean(current.isFollowUp), createdAt: now
