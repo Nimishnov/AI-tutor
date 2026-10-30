@@ -69,3 +69,21 @@ revoke all on function public.consume_tutor_daily_quota(uuid, integer)
   from public, anon, authenticated;
 grant execute on function public.consume_tutor_daily_quota(uuid, integer)
   to service_role;
+
+
+-- Private image attachments for Gemma study context. The first path segment is auth.uid().
+insert into storage.buckets (id, name, public)
+values ('study-images', 'study-images', false)
+on conflict (id) do update set public = false;
+
+create policy "Users can upload their own study images"
+on storage.objects for insert to authenticated
+with check (bucket_id = 'study-images' and (storage.foldername(name))[1] = (select auth.jwt()->>'sub'));
+
+create policy "Users can read their own study images"
+on storage.objects for select to authenticated
+using (bucket_id = 'study-images' and owner_id = (select auth.jwt()->>'sub'));
+
+create policy "Users can delete their own study images"
+on storage.objects for delete to authenticated
+using (bucket_id = 'study-images' and owner_id = (select auth.jwt()->>'sub'));

@@ -84,7 +84,9 @@ function validContext(value: unknown): value is JsonObject {
     return false;
   }
 
-  return inspect(value, 0) && hasText;
+  const image = value.image;
+  const validImage = image === undefined || (isObject(image) && typeof image.storagePath === 'string' && /^[a-z0-9-]{20,80}\/[^/]+\/[^/]+$/.test(image.storagePath) && typeof image.mimeType === 'string' && ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(image.mimeType));
+  return inspect(value, 0) && (hasText || validImage && image !== undefined);
 }
 
 function strings(value: unknown): value is string[] {
@@ -219,7 +221,8 @@ function choices(value: unknown): boolean {
 }
 
 function validTaskContext(task: Task, context: JsonObject): boolean {
-  if (typeof context.sourceText !== "string" || !context.sourceText.trim()) return false;
+  const hasImage = isObject(context.image) && typeof context.image.storagePath === 'string';
+  if ((typeof context.sourceText !== "string" || !context.sourceText.trim()) && !hasImage) return false;
   if (task === "notes") return typeof context.sourceText === "string" && context.sourceText.trim().length > 0;
   if (task === "tutor") return typeof context.question === "string" && context.question.trim().length > 0;
   if (task === "quiz") return typeof context.topic === "string" && context.topic.trim().length > 0 &&
@@ -323,10 +326,28 @@ async function handle(req: Request): Promise<Response> {
     return json({ error: "Tutor service temporarily unavailable" }, 503);
   }
 
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return json({ error: "Tutor service is not configured" }, 503);
-  const baseUrl = (Deno.env.get("OPENAI_BASE_URL") || "https://api.openai.com/v1").replace(/\/+$/, "");
-  const model = Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini";
+  const model = Deno.env.get("GEMMA_MODEL") || "gemma-4-26b-a4b-it";
+  const context = payload.context as JsonObject;
+  let imagePart: JsonObject | null = null;
+  if (isObject(context.image)) {
+    const image = context.image;
+    const storagePath = typeof image.storagePath === "string" ? image.storagePath : "";
+    const mimeType = typeof image.mimeType === "string" ? image.mimeType : "";
+    if (!storagePath.startsWith(`${userId}/`) || !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(mimeType)) {
+      return json({ error: "Invalid image attachment" }, 400);
+    }
+    const storage = ctx.supabaseAdmin as unknown as { storage: { from: (bucket: string) => { download: (path: string) => Promise<{ data: Blob | null; error: unknown | null }> } } };
+    const { data: imageBlob, error: imageError } = await storage.storage.from("study-images").download(storagePath);
+    if (imageError || !imageBlob) return json({ error: "The private study image could not be loaded" }, 400);
+    const bytes = new Uint8Array(await imageBlob.arrayBuffer());
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+    imagePart = { inlineData: { mimeType, data: btoa(binary) } };
+  }
+
   const systemPrompt = [
     task === "tutor"
       ? "You are a careful student tutor. First check whether the learner's question is answered by context.sourceText or context.sources. When it is, explain it using those sources and cite only supplied source details. When it goes beyond the supplied material, answer from reliable general knowledge when you can, label the answer clearly as general knowledge not contained in the uploaded material, and do not invent source citations. If the question needs current or uncertain information you cannot verify, say what you do and do not know and ask a useful clarifying question. Never claim outside facts came from the uploaded material."
@@ -347,74 +368,35 @@ async function handle(req: Request): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const parts: JsonObject[] = [{ text: JSON.stringify(context) }];
+    if (imagePart) parts.unshift(imagePart);
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: JSON.stringify(payload.context) },
-        ],
-        response_format: { type: "json_object" },
-        max_completion_tokens: task === "notes" ? 2600 : task === "tutor" ? 1400 : 1800,
-        temperature: task === "quiz" ? 0.55 : 0.2,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          maxOutputTokens: task === "notes" ? 2600 : task === "tutor" ? 1400 : 1800,
+          temperature: task === "quiz" ? 0.55 : 0.2
+        }
       }),
-      signal: controller.signal,
+      signal: controller.signal
     });
     if (!response.ok) {
       const errorText = await response.text();
-      let providerError: Record<string, string> = {};
-      try {
-        const parsed: unknown = JSON.parse(errorText);
-        const details = isObject(parsed) && isObject(parsed.error)
-          ? parsed.error
-          : isObject(parsed) ? parsed : {};
-        for (const field of ["type", "code", "param", "message"] as const) {
-          const value = details[field];
-          if (typeof value === "string") {
-            providerError[field] = value.replace(apiKey, "[redacted]").slice(0, 400);
-          }
-        }
-      } catch {
-        providerError.format = "non_json_error_response";
-      }
-      console.error("[tutor] AI provider rejected request", {
-        status: response.status,
-        model,
-        details: providerError,
-      });
-      return json({ error: `AI provider request failed (HTTP ${response.status}). Check tutor function logs.` }, 502);
+      console.error("[tutor] Gemini rejected request", { status: response.status, model, details: errorText.slice(0, 400) });
+      return json({ error: `Gemma request failed (HTTP ${response.status}). Check tutor function logs.` }, 502);
     }
-
     const result: unknown = await response.json();
-    if (!isObject(result) || !Array.isArray(result.choices) || !isObject(result.choices[0])) {
-      console.error("[tutor] Provider response did not contain a chat completion", { task, model });
-      return json({ error: taskError(task) }, 502);
-    }
-    const completion = result.choices[0];
-    if (completion.finish_reason === "length") {
-      console.error("[tutor] Provider output reached its token limit", { task, model });
-      return json({ error: `The AI response was cut short. ${taskError(task)}` }, 502);
-    }
-    const message = result.choices[0].message;
-    if (!isObject(message)) {
-      console.error("[tutor] Provider response did not contain text content", { task, model });
-      return json({ error: taskError(task) }, 502);
-    }
-    const messageContent = message.content;
-    const content = typeof messageContent === "string"
-      ? messageContent
-      : Array.isArray(messageContent)
-      ? messageContent.map((item) => isObject(item) && typeof item.text === "string" ? item.text : "").join("\n")
-      : "";
+    const candidate = isObject(result) && Array.isArray(result.candidates) && isObject(result.candidates[0]) ? result.candidates[0] : null;
+    const contentObject = candidate && isObject(candidate.content) ? candidate.content : null;
+    const responseParts = contentObject && Array.isArray(contentObject.parts) ? contentObject.parts : [];
+    const content = responseParts.map((item) => isObject(item) && typeof item.text === "string" ? item.text : "").join("\n");
     if (!content.trim()) {
-      const refusal = firstText(message.refusal);
-      console.error("[tutor] Provider response did not contain usable text", { task, model, refused: Boolean(refusal) });
-      return json({ error: refusal ? "The AI provider declined this request. Try rephrasing it." : taskError(task) }, 502);
+      console.error("[tutor] Gemma response did not contain usable text", { task, model });
+      return json({ error: taskError(task) }, 502);
     }
     let rawAnswer: unknown;
     try {

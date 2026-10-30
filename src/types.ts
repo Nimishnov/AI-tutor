@@ -1,6 +1,12 @@
 export type ViewKey = 'journey' | 'dashboard' | 'study' | 'materials' | 'notes' | 'tutor' | 'practice' | 'revision' | 'help';
 export type CloudStatus = 'connecting' | 'synced' | 'syncing' | 'local' | 'offline';
-export type MaterialOrigin = 'sample' | 'pasted' | 'pdf';
+export type MaterialOrigin = 'sample' | 'pasted' | 'pdf' | 'image';
+
+export interface MaterialAttachment {
+  storagePath: string;
+  mimeType: string;
+  fileName: string;
+}
 export type StudyTabStatus = 'active' | 'completed';
 
 export interface SourcePage {
@@ -16,6 +22,7 @@ export interface StudyMaterial {
   origin: MaterialOrigin;
   sourcePages: SourcePage[];
   createdAt: string;
+  attachment?: MaterialAttachment;
 }
 
 export interface NoteSection {

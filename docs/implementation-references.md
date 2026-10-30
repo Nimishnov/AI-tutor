@@ -6,3 +6,7 @@
 - [JavaScript `linkIdentity`](https://supabase.com/docs/reference/javascript/auth-linkidentity): start OAuth identity linking from the signed-in user session.
 - [JavaScript `signInWithOAuth`](https://supabase.com/docs/reference/javascript/auth-signinwithoauth): provider sign-in and explicit redirect handling.
 - [Auth redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls): set an exact Site URL and allowlisted callback destination; use the deployed Pages URL including its repository path.
+
+- [Google Gemma on the Gemini API](https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api): model identifier and image-capable generateContent examples.
+- [Gemini API generateContent](https://ai.google.dev/api/generate-content): native multimodal request and JSON response configuration.
+- [Supabase Storage access control](https://supabase.com/docs/guides/storage/security/access-control): private buckets and per-user RLS policies.

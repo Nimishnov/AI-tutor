@@ -87,7 +87,8 @@ function materialContext(material: StudyMaterial) {
     title: material.title,
     subject: material.subject,
     sourceText: material.body.slice(0, 12_000),
-    sources: material.sourcePages.map((source) => `p. ${source.page}: ${source.excerpt}`)
+    sources: material.sourcePages.map((source) => `p. ${source.page}: ${source.excerpt}`),
+    ...(material.attachment ? { image: material.attachment } : {})
   };
 }
 

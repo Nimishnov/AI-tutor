@@ -26,8 +26,8 @@ Learnloop turns your own material into source-aware notes, patient explanations,
    supabase db push
    ```
 
-   `YOUR_PROJECT_REF` is the part before `.supabase.co` in the project URL. The migration creates the per-user workspace table, RLS policies, and server-side daily quota counter.
-4. In **Edge Functions → Secrets**, add `OPENAI_API_KEY` with your compatible provider's key. Optionally add `OPENAI_MODEL` (defaults to `gpt-4o-mini`) or `OPENAI_BASE_URL` (defaults to `https://api.openai.com/v1`). Provider use may have limits or charges. Deploy the function:
+   `YOUR_PROJECT_REF` is the part before `.supabase.co` in the project URL. The migration creates the per-user workspace table, RLS policies, server-side daily quota counter, and private image bucket.
+4. In **Edge Functions → Secrets**, add `GEMINI_API_KEY` from Google AI Studio. Optionally add `GEMMA_MODEL` (defaults to `gemma-4-26b-a4b-it`). The key stays server-side; the browser never receives it. The migration also creates a private `study-images` bucket with per-user Storage policies. Deploy the function:
 
    ```bash
    supabase functions deploy tutor
@@ -92,7 +92,7 @@ pnpm dev
 
 Temporary anonymous Supabase workspaces are tied to the browser's saved auth session until the learner links Google. Clearing that session before linking may make that temporary workspace unrecoverable. A Google identity switch opens that identity's own workspace and never merges two accounts. The header distinguishes account-synced data from an unsynced device copy. Download a workspace backup before clearing or switching if you need an extra copy.
 
-The tutor Edge Function allows up to 60 AI requests per user per UTC day. Configure Supabase Auth CAPTCHA or other abuse controls before a wide public launch. Row-level security protects workspace rows. Never put `OPENAI_API_KEY`, a Supabase Secret key, a service-role key, or a Google OAuth Client Secret in GitHub Pages variables, `VITE_*`, browser code, or committed files.
+The Gemma tutor Edge Function allows up to 60 AI requests per user per UTC day. Configure Supabase Auth CAPTCHA or other abuse controls before a wide public launch. Row-level security protects workspace rows. Never put `GEMINI_API_KEY`, a Supabase Secret key, a service-role key, or a Google OAuth Client Secret in GitHub Pages variables, `VITE_*`, browser code, or committed files.
 
 ## Key files
 
@@ -103,3 +103,8 @@ The tutor Edge Function allows up to 60 AI requests per user per UTC day. Config
 - `.github/workflows/deploy-pages.yml` — GitHub Pages build/deployment.
 - `.env.example` — placeholders only; not a real secrets file.
 - `docs/implementation-references.md` — official integration references.
+
+
+## What changed in this upgrade
+
+This bundle is disconnected from the deleted project. It uses a fresh Supabase project, Google Gemma 4 (`gemma-4-26b-a4b-it`) through the native Gemini `generateContent` API, and a private per-user `study-images` Storage bucket. Learners can upload JPG, PNG, WEBP, or GIF study images; the Edge Function verifies the storage path belongs to the authenticated user, downloads the image server-side, and sends it to Gemma without exposing the file publicly.

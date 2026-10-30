@@ -97,11 +97,11 @@ The migration creates the learning-workspace table, rules so each learner can ac
 
 ### 5. Add the AI provider key and deploy the function
 
-The AI function needs an API key from an OpenAI-compatible model provider. This is separate from your Supabase publishable key and may incur charges with that provider.
+The AI function uses Google Gemma 4 through the Gemini API. This is separate from your Supabase publishable key and may incur Google AI usage limits or charges.
 
 1. In Supabase, open **Edge Functions → Secrets**.
-2. Add a secret named exactly `OPENAI_API_KEY` and paste your provider key as its value.
-3. Optionally add `OPENAI_MODEL` if you want to use a different model from the default. Optionally add `OPENAI_BASE_URL` if you use a different OpenAI-compatible provider.
+2. Add a secret named exactly `GEMINI_API_KEY` and paste your provider key as its value.
+3. Optionally add `GEMMA_MODEL` if you want to use a different supported Gemma model. Leave it unset to use `gemma-4-26b-a4b-it`.
 4. Save the secrets.
 5. Return to the same project folder in the terminal and deploy the function:
 
@@ -111,9 +111,9 @@ The AI function needs an API key from an OpenAI-compatible model provider. This 
 
 6. In Supabase, check **Edge Functions** and confirm that `tutor` appears as deployed.
 
-On Windows PowerShell, run the deploy from the extracted project folder as `npx.cmd supabase functions deploy tutor --project-ref YOUR_PROJECT_REF`. Use the same project reference shown in the Supabase dashboard. The latest function also accepts common equivalent JSON field names and code-fenced provider output, gives the learner a retryable task-specific message when a response is genuinely incomplete, and asks Practice for varied questions. Redeploy it after replacing the source. This update does not add a database table or require a new migration.
+On Windows PowerShell, run the deploy from the extracted project folder as `npx.cmd supabase functions deploy tutor --project-ref YOUR_PROJECT_REF`. Use the same project reference shown in the Supabase dashboard. The function uses the native Gemini `generateContent` endpoint, validates the structured response, enforces the daily quota, and can read private study images from the `study-images` bucket. Redeploy it after replacing the source. The included migration must be applied because it creates the private image bucket and policies.
 
-Put provider keys only in Supabase Edge Function Secrets. Supabase documents both the Dashboard secrets form and how functions read these values.[4] Do not add `OPENAI_API_KEY` to GitHub, the `.env.example` file, or any variable beginning with `VITE_`.
+Put the Google API key only in Supabase Edge Function Secrets. Supabase documents both the Dashboard secrets form and how functions read these values.[4] Do not add `GEMINI_API_KEY` to GitHub, the `.env.example` file, or any variable beginning with `VITE_`.
 
 ## Part 2 — Upload the website to GitHub
 
@@ -212,7 +212,7 @@ The first deployment can take several minutes. Do not judge the result until the
 
 **Notes or Tutor says the AI response was incomplete.** The source and question stay saved; use the retry button. If you recently replaced the source code, redeploy the Edge Function from the project folder. In Windows PowerShell, run `npx.cmd supabase functions deploy tutor --project-ref YOUR_PROJECT_REF`. Then open Supabase **Edge Functions → tutor → Invocations/Logs** and check the new invocation. The updated function accepts common provider JSON variations, but it cannot repair a provider error, an exhausted quota, or a response with no usable answer.
 
-**AI requests fail but the rest of the site works.** Confirm `OPENAI_API_KEY` is set under Supabase **Edge Functions → Secrets** and that the `tutor` function deployment completed. Check that your provider key is active, the configured base URL/model belong to that provider, and the account has available usage. Never paste the key into GitHub or a support chat.
+**AI requests fail but the rest of the site works.** Confirm `GEMINI_API_KEY` is set under Supabase **Edge Functions → Secrets** and that the `tutor` function deployment completed. Check that your provider key is active, the configured base URL/model belong to that provider, and the account has available usage. Never paste the key into GitHub or a support chat.
 
 **Google sign-in does not start or return to the site.** Confirm Google is enabled in Supabase, the Google OAuth Client ID and Client Secret were saved in Supabase, the Google callback is exactly `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`, and the GitHub Pages URL is in Supabase’s allowed redirect URLs. For linking an anonymous workspace, enable manual identity linking if that option is shown.
 
@@ -227,7 +227,7 @@ pnpm install
 pnpm dev
 ```
 
-Open the local address printed by the command. `.env.local` is ignored by Git. Do not put your OpenAI-compatible provider key in this file.
+Open the local address printed by the command. `.env.local` is ignored by Git. Do not put your Google Gemini API key in this file.
 
 ## Official references
 

@@ -4,6 +4,7 @@ import {
   Lightbulb, LoaderCircle, MessageCircleQuestion, UploadCloud
 } from 'lucide-react';
 import { extractDocument } from '../lib/documents';
+import { uploadStudyImage } from '../lib/media';
 import { createId } from '../lib/storage';
 import type { StudyMaterial, ViewKey } from '../types';
 
@@ -26,6 +27,7 @@ export default function Materials({ materials, activeMaterialId, saveStatus, ini
   const [body, setBody] = useState('');
   const [sourcePages, setSourcePages] = useState<StudyMaterial['sourcePages']>([]);
   const [selectedFile, setSelectedFile] = useState('');
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,6 +42,15 @@ export default function Materials({ materials, activeMaterialId, saveStatus, ini
     setError('');
     setBusy(true);
     try {
+      if (file.type.startsWith('image/')) {
+        setSelectedImage(file);
+        setSelectedFile(file.name);
+        setTitle(file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '));
+        setBody('Image attachment — Gemma will use the uploaded image as study context.');
+        setSourcePages([]);
+        setMode('paste');
+        return;
+      }
       const extracted = await extractDocument(file);
       setBody(extracted.text);
       setSourcePages(extracted.pages);
@@ -53,10 +64,10 @@ export default function Materials({ materials, activeMaterialId, saveStatus, ini
     }
   };
 
-  const addMaterial = (event: FormEvent) => {
+  const addMaterial = async (event: FormEvent) => {
     event.preventDefault();
     const cleanBody = body.trim();
-    if (!cleanBody) {
+    if (!cleanBody && !selectedImage) {
       setError(mode === 'question' ? 'Type a question first.' : 'Paste or upload a passage first.');
       return;
     }
@@ -65,14 +76,23 @@ export default function Materials({ materials, activeMaterialId, saveStatus, ini
       return;
     }
     const isQuestion = mode === 'question';
+    const materialId = createId('material');
+    let attachment: StudyMaterial['attachment'];
+    if (selectedImage) {
+      setBusy(true);
+      try { attachment = await uploadStudyImage(selectedImage, materialId); }
+      catch (caught) { setError(caught instanceof Error ? caught.message : 'The image could not be uploaded.'); setBusy(false); return; }
+      setBusy(false);
+    }
     const material: StudyMaterial = {
-      id: createId('material'),
+      id: materialId,
       title: title.trim() || (isQuestion ? `Question: ${cleanBody.slice(0, 42)}${cleanBody.length > 42 ? '…' : ''}` : 'Untitled study material'),
       subject: subject.trim() || 'Study material',
       body: cleanBody,
-      origin: mode === 'upload' || selectedFile.toLowerCase().endsWith('.pdf') ? 'pdf' : 'pasted',
+      origin: selectedImage ? 'image' : mode === 'upload' || selectedFile.toLowerCase().endsWith('.pdf') ? 'pdf' : 'pasted',
       sourcePages: sourcePages.length ? sourcePages : [{ page: 1, excerpt: cleanBody.slice(0, 260) }],
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      ...(attachment ? { attachment } : {})
     };
     onAddMaterial(material, 'study');
   };
@@ -85,18 +105,18 @@ export default function Materials({ materials, activeMaterialId, saveStatus, ini
         <div className="workspace-heading"><div><div className="section-step"><span>01</span> PICK YOUR STARTING POINT</div><h2>What are you working through?</h2><p>Use a passage when you have one. Type a question when you don’t.</p></div><div className="workspace-heading-mark"><div className="mark-stack"><span /><span /><span /></div></div></div>
 
         <div className="intake-tabs" role="tablist" aria-label="Study material input">
-          <button className={`intake-tab ${mode === 'upload' ? 'selected' : ''}`} role="tab" aria-selected={mode === 'upload'} onClick={() => { setMode('upload'); setError(''); }}><FileUp size={16} /> Upload a file</button>
+          <button className={`intake-tab ${mode === 'upload' ? 'selected' : ''}`} role="tab" aria-selected={mode === 'upload'} onClick={() => { setMode('upload'); setSelectedImage(null); setError(''); }}><FileUp size={16} /> Upload a file</button>
           <button className={`intake-tab ${mode === 'paste' ? 'selected' : ''}`} role="tab" aria-selected={mode === 'paste'} onClick={() => { setMode('paste'); setError(''); }}><FileText size={16} /> Paste text</button>
-          <button className={`intake-tab ${mode === 'question' ? 'selected' : ''}`} role="tab" aria-selected={mode === 'question'} onClick={() => { setMode('question'); setTitle(''); setBody(''); setSourcePages([]); setError(''); }}><MessageCircleQuestion size={16} /> Ask a question</button>
+          <button className={`intake-tab ${mode === 'question' ? 'selected' : ''}`} role="tab" aria-selected={mode === 'question'} onClick={() => { setMode('question'); setSelectedImage(null); setSelectedFile(''); setTitle(''); setBody(''); setSourcePages([]); setError(''); }}><MessageCircleQuestion size={16} /> Ask a question</button>
         </div>
 
         <form className="intake-form" onSubmit={addMaterial}>
           {mode === 'upload' && (
             <div className="upload-zone" role="button" tabIndex={0} onClick={() => fileRef.current?.click()} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') fileRef.current?.click(); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void handleFile(event.dataTransfer.files[0]); }}>
-              <input ref={fileRef} className="visually-hidden" type="file" accept="application/pdf,.pdf,text/plain,.txt" onChange={(event) => void handleFile(event.target.files?.[0])} />
+              <input ref={fileRef} className="visually-hidden" type="file" accept="application/pdf,.pdf,text/plain,.txt,image/jpeg,image/png,image/webp,image/gif" onChange={(event) => void handleFile(event.target.files?.[0])} />
               <div className="upload-symbol">{busy ? <LoaderCircle className="spin" size={23} /> : <UploadCloud size={23} />}</div>
               <strong>{busy ? 'Reading your file…' : selectedFile || 'Drop your file here, or browse'}</strong>
-              <span>{selectedFile ? 'Text extracted. Review or edit it in the Paste text tab.' : 'PDF or plain text · up to 15 MB · selectable text PDFs'}</span>
+              <span>{selectedImage ? 'Image selected. Add a name and start the study session.' : selectedFile ? 'Text extracted. Review or edit it in the Paste text tab.' : 'PDF, text, or image · up to 15 MB · Gemma can read study images'}</span>
               {!busy && <span className="browse-link">Choose file <ArrowRight size={13} /></span>}
             </div>
           )}
@@ -125,7 +145,7 @@ export default function Materials({ materials, activeMaterialId, saveStatus, ini
           {error && <div className="inline-error" role="alert">{error}</div>}
           <div className="form-footer"><span className="privacy-note"><Check size={14} /> {saveStatus}</span><button className="button button-primary" type="submit">{mode === 'question' ? 'Open this study thread' : 'Start a study session'} <ArrowRight size={16} /></button></div>
         </form>
-        <div className="prototype-note"><FileText size={15} /><span>PDFs need selectable text. This beta cannot read photographed pages or slide decks.</span></div>
+        <div className="prototype-note"><FileText size={15} /><span>PDFs need selectable text. For photographed pages, upload the image directly; Gemma can inspect JPG, PNG, WEBP, and GIF study images.</span></div>
       </section>
 
       <section className="library-section">
@@ -134,7 +154,7 @@ export default function Materials({ materials, activeMaterialId, saveStatus, ini
           <div className="material-list">
             {materials.map((material) => {
               const active = material.id === activeMaterialId;
-              return <button key={material.id} className={`material-row ${active ? 'material-row-active' : ''}`} onClick={() => onSelectMaterial(material.id)}><div className={`material-row-icon ${material.origin === 'sample' ? 'icon-sample' : material.origin === 'pdf' ? 'icon-pdf' : 'icon-paste'}`}>{material.origin === 'sample' ? <BookOpen size={17} /> : material.origin === 'pdf' ? <FileText size={17} /> : <FilePlus2 size={17} />}</div><div className="material-row-copy"><strong>{material.title}</strong><span>{material.subject} · {material.origin === 'sample' ? 'Sample source' : material.origin === 'pdf' ? 'PDF upload' : 'Pasted text'}</span></div><span className="material-selected">{active ? <><Check size={14} /> Selected</> : <ArrowRight size={15} />}</span></button>;
+              return <button key={material.id} className={`material-row ${active ? 'material-row-active' : ''}`} onClick={() => onSelectMaterial(material.id)}><div className={`material-row-icon ${material.origin === 'sample' ? 'icon-sample' : material.origin === 'pdf' ? 'icon-pdf' : 'icon-paste'}`}>{material.origin === 'sample' ? <BookOpen size={17} /> : material.origin === 'pdf' ? <FileText size={17} /> : material.origin === 'image' ? <FileUp size={17} /> : <FilePlus2 size={17} />}</div><div className="material-row-copy"><strong>{material.title}</strong><span>{material.subject} · {material.origin === 'sample' ? 'Sample source' : material.origin === 'pdf' ? 'PDF upload' : material.origin === 'image' ? 'Private image' : 'Pasted text'}</span></div><span className="material-selected">{active ? <><Check size={14} /> Selected</> : <ArrowRight size={15} />}</span></button>;
             })}
           </div>
         ) : <div className="empty-library"><FileText size={20} /><span>Your saved materials will live here.</span></div>}
