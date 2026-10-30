@@ -5,3 +5,6 @@ dist/
 .env.*
 !.env.example
 .DS_Store
+supabase/.temp/
+package-lock.json
+.env.local
